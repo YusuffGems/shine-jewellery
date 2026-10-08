@@ -29,7 +29,7 @@ export function ListingView({ slug }: { slug: string }) {
   const [limit, setLimit] = useState(PAGE);
   const [showFilters, setShowFilters] = useState(true);
   const [mobileFilters, setMobileFilters] = useState(false);
-    const [videoReady, setVideoReady] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
   useEffect(() => setVideoReady(false), [slug]);
 
   const base = useMemo(() => listing?.products ?? [], [listing]);
@@ -52,12 +52,11 @@ export function ListingView({ slug }: { slug: string }) {
   const title = listing.kind === "category" ? L(listing.category.name) : listing.kind === "collection" ? L(listing.collection.name) : t("listing.allJewellery");
   const desc = listing.kind === "category" ? L(listing.category.description) : listing.kind === "collection" ? L(listing.collection.description) : t("listing.allDescription");
   const heroMedia = listing.kind === "collection" ? listing.collection.heroMediaId : listing.kind === "category" ? listing.category.mediaId : undefined;
-  const heroVideo = listing.kind === "collection" ? listing.collection.heroVideoId : undefined;
 
   // ── Page banners: one video per category / collection page ──────────────
   // Key = the last part of the page address (/collections/<key>). Value = video file in /public.
   // Pages not listed here keep their default image.
-   const bannerVideos: Record<string, string> = {
+  const bannerVideos: Record<string, string> = {
     // Top menu
     "gold-jewellery": "/media/videos/gold.mp4",
     "diamond-jewellery": "/media/videos/diamond.mp4",
@@ -88,10 +87,10 @@ export function ListingView({ slug }: { slug: string }) {
 
   return (
     <>
-      {bannerVideo || heroMedia ? (
-        <section className="plp-hero">
-                   {/* The page image shows instantly; the banner video fades in on top once it can play. */}
-          {heroMedia ? <Media mediaId={heroMedia} kind="collection" dark priority /> : null}
+           {bannerVideo || heroMedia ? (
+        <section className="plp-hero" style={bannerVideo ? { background: "#1a1214" } : undefined}>
+          {/* Pages with a banner video show only the video (dark until it plays); other pages show their image. */}
+          {heroMedia && !bannerVideo ? <Media mediaId={heroMedia} kind="collection" dark priority /> : null}
           {bannerVideo ? (
             <div className="media" style={{ background: "transparent", opacity: videoReady ? 1 : 0, transition: "opacity 0.6s ease" }}>
               <video key={bannerVideo} src={bannerVideo} autoPlay muted loop playsInline preload="auto" aria-hidden="true" onCanPlay={() => setVideoReady(true)} />

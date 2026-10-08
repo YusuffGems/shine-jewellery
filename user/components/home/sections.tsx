@@ -12,6 +12,7 @@ import { ProductCard } from "@/user/components/product/ProductCard";
 import { Icon, SocialIcon } from "@/shared/components/Icon";
 import { useToast } from "@/shared/components/Toast";
 import type { HomeSection } from "@/types";
+import { InViewVideo } from "@/shared/components/InViewVideo";
 
 type P = { s: HomeSection };
 
@@ -28,10 +29,13 @@ export function SectionHead({ s, start }: { s: HomeSection; start?: boolean }) {
 
 export function HeroSection({ s }: P) {
   const { L } = useI18n();
+  const HERO_VIDEO = "/media/videos/hero_main.mp4"; // ← change the hero video here
   return (
     <section className="hero" aria-label={L(s.title)}>
-           <div className="hero-media" style={{ background: "#1a1214" }}>
-        <Media mediaId={s.videoId ? undefined : s.mediaId} mobileMediaId={s.videoId ? undefined : s.mobileMediaId} videoId={s.videoId} kind="campaign" dark priority playInView={false} />
+      <div className="hero-media" style={{ background: "#1a1214" }}>
+        <div className="media" style={{ background: "transparent" }}>
+          <video src={HERO_VIDEO} autoPlay muted loop playsInline preload="auto" aria-hidden="true" />
+        </div>
       </div>
       <div className="container">
         <div className="hero-content">
@@ -52,36 +56,14 @@ export function HeroSection({ s }: P) {
 export function CategoriesSection({ s }: P) {
   const d = useDb();
   const { t, L } = useI18n();
-
-  const order = [
-    "rings",
-    "earrings",
-    "necklaces",
-    "bracelets",
-    "bangles",
-    "pendants",
-    "gold-coins",
-  ];
-
+  const order = ["rings", "earrings", "necklaces", "bracelets", "bangles", "pendants", "gold-coins"];
   const cats = order
-    .map((slug) =>
-      d.categories.find(
-        (c) => c.active && c.slug === slug
-      )
-    )
-    .filter(
-      (c): c is NonNullable<typeof c> => !!c
-    );
-
-  const shown = cats.length
-    ? cats
-    : d.categories
-        .filter((c) => c.active)
-        .slice(0, 7);
+    .map((slug) => d.categories.find((c) => c.active && c.slug === slug))
+    .filter((c): c is NonNullable<typeof c> => !!c);
+  const shown = cats.length ? cats : d.categories.filter((c) => c.active).slice(0, 7);
 
   // Actual videos from public/media/videos/
   const categoryVideos: Record<string, string> = {
-    
     rings: "/media/videos/rings.mp4",
     earrings: "/media/videos/earrings.mp4",
     necklaces: "/media/videos/necklaces.mp4",
@@ -95,72 +77,23 @@ export function CategoriesSection({ s }: P) {
     <section className="section">
       <div className="container">
         <SectionHead s={s} />
-
         <div className="cat-rail reveal">
           {shown.map((c) => {
             const video = categoryVideos[c.slug];
-
-            const productCount = d.products.filter(
-              (p) =>
-                p.status === "active" &&
-                p.categoryIds.includes(c.id)
-            ).length;
-
+            const productCount = d.products.filter((p) => p.status === "active" && p.categoryIds.includes(c.id)).length;
             return (
-              <Link
-                key={c.id}
-                href={`/collections/${c.slug}`}
-                className="cat-tile"
-              >
+              <Link key={c.id} href={`/collections/${c.slug}`} className="cat-tile">
                 {/* SAME SIZE ARCH FOR EVERY CATEGORY */}
-                <div
-                  className="arch"
-                  style={{
-                    width: "100%",
-                    height: "220px",
-                    minHeight: "220px",
-                    maxHeight: "220px",
-                    overflow: "hidden",
-                    position: "relative",
-                  }}
-                >
+                <div className="arch" style={{ width: "100%", height: "220px", minHeight: "220px", maxHeight: "220px", overflow: "hidden", position: "relative" }}>
                   {video ? (
-                    <video
-                      src={video}
-                      autoPlay
-                      muted
-                      loop
-                      playsInline
-                      preload="auto"
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                        objectPosition: "center",
-                        display: "block",
-                      }}
-                      aria-label={L(c.name)}
-                    />
+                    <InViewVideo src={video} label={L(c.name)} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block" }} />
                   ) : (
-                    <Media
-                      mediaId={c.mediaId}
-                      className="w-full h-full"
-                      kind="category"
-                      alt={L(c.name)}
-                    />
+                    <Media mediaId={c.mediaId} className="w-full h-full" kind="category" alt={L(c.name)} />
                   )}
                 </div>
-
                 <span>
-                  <span className="cat-tile-name">
-                    {L(c.name)}
-                  </span>
-
-                  <span className="cat-tile-count">
-                    {t("home.pieces", {
-                      count: productCount,
-                    })}
-                  </span>
+                  <span className="cat-tile-name">{L(c.name)}</span>
+                  <span className="cat-tile-count">{t("home.pieces", { count: productCount })}</span>
                 </span>
               </Link>
             );
@@ -179,17 +112,9 @@ export function FeaturedCollectionSection({ s }: P) {
   return (
     <section className="section section--surface">
       <div className="container feature">
-               <div className="feature-media reveal">
+        <div className="feature-media reveal">
           <div className="media" style={{ aspectRatio: "4/5" }}>
-            <video
-              src="/media/videos/dimond-nekles.mp4"
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="auto"
-              aria-label={L(s.title)}
-            />
+            <InViewVideo src="/media/videos/dimond-nekles.mp4" label={L(s.title)} />
           </div>
         </div>
         <div className="feature-body reveal">
@@ -283,7 +208,7 @@ export function VideoStorySection({ s }: P) {
     <section className="video-story">
       <div className="video-frame" style={{ aspectRatio: "auto", height: HEIGHT }}>
         <div className="media">
-          <video src={FILM} autoPlay muted loop playsInline preload="auto" aria-label={L(s.title)} />
+          <InViewVideo src={FILM} label={L(s.title)} />
         </div>
         <div className="video-caption">
           <span className="eyebrow" style={{ color: "var(--color-gold-soft)" }}>{L(s.eyebrow)}</span>
@@ -378,7 +303,7 @@ export function TestimonialsSection({ s }: P) {
             <figure key={q.id} className="quote reveal">
               <span className="stars" aria-hidden="true">★★★★★</span>
               <blockquote>“{L(q.text)}”</blockquote>
-              <cite>{q.name}</cite>
+              {q.name}
             </figure>
           ))}
         </div>

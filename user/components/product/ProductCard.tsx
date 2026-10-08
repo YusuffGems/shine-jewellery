@@ -55,7 +55,7 @@ export function ProductCard({ product }: { product: Product }) {
             muted
             loop
             playsInline
-            preload="auto"
+            preload="metadata"
             aria-hidden="true"
             onError={() => setVideoFailed(true)}
             onPlaying={() => setVideoPlaying(true)}
