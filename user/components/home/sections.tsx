@@ -30,8 +30,8 @@ export function HeroSection({ s }: P) {
   const { L } = useI18n();
   return (
     <section className="hero" aria-label={L(s.title)}>
-      <div className="hero-media">
-        <Media mediaId={s.mediaId} mobileMediaId={s.mobileMediaId} videoId={s.videoId} kind="campaign" dark priority playInView={false} />
+           <div className="hero-media" style={{ background: "#1a1214" }}>
+        <Media mediaId={s.videoId ? undefined : s.mediaId} mobileMediaId={s.videoId ? undefined : s.mobileMediaId} videoId={s.videoId} kind="campaign" dark priority playInView={false} />
       </div>
       <div className="container">
         <div className="hero-content">

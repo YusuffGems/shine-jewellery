@@ -30,12 +30,15 @@ export function ProductCard({ product }: { product: Product }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [hover, setHover] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
+  const [videoPlaying, setVideoPlaying] = useState(false);
+  const hasVideo = !!videoUrl && !videoFailed;
   const startVideo = () => {
     setHover(true);
     videoRef.current?.play().catch(() => undefined);
   };
   const stopVideo = () => {
     setHover(false);
+    setVideoPlaying(false);
     const v = videoRef.current;
     if (v) { v.pause(); v.currentTime = 0; }
   };
@@ -44,7 +47,7 @@ export function ProductCard({ product }: { product: Product }) {
     <article className="pcard" data-bordered={tokens.cardBorder} onMouseEnter={startVideo} onMouseLeave={stopVideo}>
       <div className="pcard-media">
         <Media className="pcard-main" mediaId={product.imageIds[0]} alt={name} kind="product" showVideoBadge={false} />
-        {product.imageIds[1] ? <Media className="pcard-alt" mediaId={product.imageIds[1]} alt="" kind="product" /> : null}
+        {product.imageIds[1] && !hasVideo ? <Media className="pcard-alt" mediaId={product.imageIds[1]} alt="" kind="product" /> : null}
         {videoUrl ? (
           <video
             ref={videoRef}
@@ -52,10 +55,11 @@ export function ProductCard({ product }: { product: Product }) {
             muted
             loop
             playsInline
-            preload="none"
+            preload="auto"
             aria-hidden="true"
             onError={() => setVideoFailed(true)}
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: hover && !videoFailed ? 1 : 0, transition: "opacity 0.4s ease", pointerEvents: "none", zIndex: 1 }}
+            onPlaying={() => setVideoPlaying(true)}
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: hover && videoPlaying ? 1 : 0, transition: "opacity 0.3s ease", pointerEvents: "none", zIndex: 1 }}
           />
         ) : null}
         {product.badges.length ? (

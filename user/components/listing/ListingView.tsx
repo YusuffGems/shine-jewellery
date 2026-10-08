@@ -29,6 +29,8 @@ export function ListingView({ slug }: { slug: string }) {
   const [limit, setLimit] = useState(PAGE);
   const [showFilters, setShowFilters] = useState(true);
   const [mobileFilters, setMobileFilters] = useState(false);
+    const [videoReady, setVideoReady] = useState(false);
+  useEffect(() => setVideoReady(false), [slug]);
 
   const base = useMemo(() => listing?.products ?? [], [listing]);
   const prices = useMemo(() => priceMap(d, base), [d, base]);
@@ -88,13 +90,13 @@ export function ListingView({ slug }: { slug: string }) {
     <>
       {bannerVideo || heroMedia ? (
         <section className="plp-hero">
+                   {/* The page image shows instantly; the banner video fades in on top once it can play. */}
+          {heroMedia ? <Media mediaId={heroMedia} kind="collection" dark priority /> : null}
           {bannerVideo ? (
-            <div className="media">
-              <video key={bannerVideo} src={bannerVideo} autoPlay muted loop playsInline preload="auto" aria-hidden="true" />
+            <div className="media" style={{ background: "transparent", opacity: videoReady ? 1 : 0, transition: "opacity 0.6s ease" }}>
+              <video key={bannerVideo} src={bannerVideo} autoPlay muted loop playsInline preload="auto" aria-hidden="true" onCanPlay={() => setVideoReady(true)} />
             </div>
-          ) : (
-            <Media mediaId={heroMedia} videoId={heroVideo} kind="collection" dark priority />
-          )}
+          ) : null}
           <div className="container plp-hero-inner">
             {crumbs}
             <h1>{title}</h1>
