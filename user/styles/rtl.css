@@ -1,0 +1,34 @@
+/* ──────────────────────────────────────────────────────────────
+   USER APP — Arabic / RTL. Layout mirrors automatically through logical
+   properties; this file handles typography and directional icons.
+   Arabic typography is tuned separately — not a mirrored copy.
+   ────────────────────────────────────────────────────────────── */
+[dir="rtl"] body { font-family: var(--font-arabic); letter-spacing: 0; line-height: 1.85; }
+[dir="rtl"] .section-title, [dir="rtl"] .hero-title, [dir="rtl"] .pdp-title, [dir="rtl"] .page-title,
+[dir="rtl"] .plp-hero h1, [dir="rtl"] .plp-plain h1, [dir="rtl"] .mega-col h4, [dir="rtl"] .quote blockquote,
+[dir="rtl"] .cat-tile-name, [dir="rtl"] .showroom-card h3, [dir="rtl"] .panel h2, [dir="rtl"] .summary h2,
+[dir="rtl"] .auth-card h1, [dir="rtl"] .cart-line h3, [dir="rtl"] .empty h3, [dir="rtl"] .modal-head h2, [dir="rtl"] .placeholder-title {
+  font-family: var(--font-arabic);
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.35;
+}
+[dir="rtl"] .hero-title { font-size: calc(var(--fs-display) * 0.78); }
+[dir="rtl"] .section-title { font-size: calc(var(--fs-h2) * 0.85); }
+[dir="rtl"] .quote blockquote { font-style: normal; font-size: 1.15rem; }
+/* Arabic doesn't use letter-spaced caps */
+[dir="rtl"] .eyebrow, [dir="rtl"] .caps, [dir="rtl"] .nav-link, [dir="rtl"] .btn, [dir="rtl"] .announcement,
+[dir="rtl"] .breadcrumb, [dir="rtl"] .tab, [dir="rtl"] .field > label, [dir="rtl"] .label, [dir="rtl"] .badge,
+[dir="rtl"] .pcard-meta, [dir="rtl"] .filter-group summary, [dir="rtl"] .accordion summary, [dir="rtl"] .site-footer h4,
+[dir="rtl"] .step, [dir="rtl"] .pdp-links > *, [dir="rtl"] .table th, [dir="rtl"] .placeholder-label, [dir="rtl"] .footer-bottom {
+  letter-spacing: 0;
+  text-transform: none;
+}
+[dir="rtl"] .nav-link { font-size: 0.85rem; }
+[dir="rtl"] .eyebrow { font-size: 0.8rem; }
+[dir="rtl"] .btn { font-size: 0.85rem; }
+/* Latin brand wordmark stays Latin */
+[dir="rtl"] .brand-name, [dir="rtl"] .brand-tag { font-family: var(--font-heading); direction: ltr; }
+[dir="rtl"] .video-caption { inset-inline-start: var(--page-pad); }
+[dir="rtl"] .btn--ghost { --origin-start: right; }
+[dir="rtl"] .hero-scroll { inset-inline-end: auto; inset-inline-start: var(--page-pad); }

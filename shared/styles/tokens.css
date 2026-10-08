@@ -1,0 +1,98 @@
+/* ──────────────────────────────────────────────────────────────
+   SHINE design tokens.
+   Defaults = "SHINE Luxury" preset. The Theme Builder overrides these
+   at runtime on :root (and on the preview frame) via lib/theme/tokens.ts.
+   ────────────────────────────────────────────────────────────── */
+:root {
+  /* Colour */
+  --color-primary: #101010;
+  --color-secondary: #1b1a18;
+  --color-accent: #c7a56a;
+  --color-gold: #c7a56a;
+  --color-gold-soft: #d9c08a;
+  --color-background: #f7f4ee;
+  --color-surface: #ffffff;
+  --color-pearl: color-mix(in srgb, var(--color-background) 70%, var(--color-border));
+  --color-text: #181818;
+  --color-muted: #68645d;
+  --color-border: #ded8ce;
+  --color-success: #397354;
+  --color-warning: #a7792f;
+  --color-error: #a64b4b;
+  --color-on-primary: #ffffff;
+  --color-overlay: rgba(10, 10, 10, 0.55);
+
+  /* Type families */
+  --font-heading: "Cormorant Garamond", "Times New Roman", serif;
+  --font-body: "Jost", system-ui, sans-serif;
+  --font-arabic: "Noto Kufi Arabic", "Segoe UI", Tahoma, sans-serif;
+  --weight-heading: 500;
+  --weight-body: 400;
+  --tracking: 0.02em;
+
+  /* Type scale (fluid) */
+  --fs-display: clamp(2.75rem, 1.6rem + 4.6vw, 6rem);
+  --fs-h1: clamp(2.25rem, 1.5rem + 2.8vw, 4rem);
+  --fs-h2: clamp(1.85rem, 1.35rem + 1.9vw, 3rem);
+  --fs-h3: clamp(1.4rem, 1.2rem + 0.8vw, 1.9rem);
+  --fs-h4: 1.2rem;
+  --fs-body-lg: 1.0625rem;
+  --fs-body: 0.9375rem;
+  --fs-body-sm: 0.8125rem;
+  --fs-caption: 0.6875rem;
+  --fs-button: 0.75rem;
+  --fs-nav: 0.72rem;
+  --fs-price: 1.15rem;
+  --tracking-caps: 0.18em;
+  --lh-tight: 1.08;
+  --lh-body: 1.65;
+
+  /* Buttons / cards / inputs */
+  --btn-bg: var(--color-primary);
+  --btn-fg: var(--color-on-primary);
+  --btn-border: var(--color-primary);
+  --btn-hover-bg: var(--color-gold);
+  --btn-hover-fg: #101010;
+  --btn-radius: 0px;
+  --btn-height: 50px;
+  --btn-transform: uppercase;
+  --card-radius: 2px;
+  --card-shadow: none;
+  --card-border: 1px solid transparent;
+  --image-ratio: 4/5;
+  --input-radius: 0px;
+
+  /* Layout */
+  --container: 1360px;
+  --page-pad: 32px;
+  --section-space: 104px;
+  --grid-cols: 4;
+  --grid-gap: clamp(14px, 1.6vw, 28px);
+  --radius-sm: 1px;
+  --radius-md: 2px;
+  --radius-lg: 4px;
+
+  /* Header / footer */
+  --header-position: sticky;
+  --logo-size: 30px;
+  --nav-gap: 22px;
+  --header-h: 76px;
+  --footer-bg: #101010;
+  --footer-fg: #efeae1;
+  --footer-cols: 4;
+
+  /* Motion */
+  --speed: 1;
+  --dur-fast: 180ms;
+  --dur: 320ms;
+  --dur-slow: 700ms;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Elevation */
+  --shadow-pop: 0 30px 60px -30px rgba(16, 16, 16, 0.35);
+  --z-header: 40;
+  --z-drawer: 60;
+  --z-modal: 70;
+  --z-toast: 80;
+}

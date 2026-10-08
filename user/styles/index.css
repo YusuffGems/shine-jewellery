@@ -1,0 +1,5 @@
+/* USER APP styles — imported only by app/(user)/layout.tsx */
+@import "./storefront.css";
+@import "./motion.css";
+@import "./rtl.css";
+@import "./responsive.css";

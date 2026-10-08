@@ -1,0 +1,814 @@
+// ─────────────────────────────────────────────────────────────
+// SHINE Gold & Diamonds — PostgreSQL schema (Phase 2: API mode)
+// Mirrors types/index.ts. Localized fields are stored as *_en / *_ar.
+// Money: Decimal(12,2) QAR. Weights: Decimal(10,3) grams.
+// ─────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Auth / RBAC ─────────────────────────────────────────────
+
+enum RoleKey {
+  SUPER_ADMIN
+  ADMIN
+  BRANCH_MANAGER
+  INVENTORY_MANAGER
+  SALES_MANAGER
+  CONTENT_MANAGER
+  CUSTOMER
+}
+
+model User {
+  id             String     @id @default(cuid())
+  email          String     @unique
+  name           String
+  phone          String?
+  passwordHash   String
+  roleId         String
+  role           Role       @relation(fields: [roleId], references: [id])
+  branchId       String?
+  branch         Branch?    @relation(fields: [branchId], references: [id])
+  isAdmin        Boolean    @default(false) // admin accounts are separate from customers
+  active         Boolean    @default(true)
+  twoFactorSecret String?
+  failedAttempts Int        @default(0)
+  lockedUntil    DateTime?
+  lastLoginAt    DateTime?
+  addresses      Address[]
+  orders         Order[]
+  cart           Cart?
+  wishlist       Wishlist?
+  appointments   Appointment[]
+  reviews        Review[]
+  sessions       Session[]
+  loginHistory   LoginHistory[]
+  notifications  Notification[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([roleId])
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  key         RoleKey          @unique
+  name        String
+  users       User[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id    String           @id @default(cuid())
+  key   String           @unique // e.g. "products.update"
+  roles RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  area      String   // "admin" | "customer"
+  tokenHash String   @unique
+  expiresAt DateTime
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+}
+
+model LoginHistory {
+  id      String   @id @default(cuid())
+  userId  String?
+  user    User?    @relation(fields: [userId], references: [id])
+  email   String
+  area    String
+  success Boolean
+  ip      String?
+  at      DateTime @default(now())
+}
+
+model Address {
+  id         String  @id @default(cuid())
+  userId     String
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label      String
+  fullName   String
+  phone      String
+  building   String
+  street     String
+  zone       String
+  area       String
+  city       String
+  landmark   String?
+  directions String?
+  country    String  @default("Qatar")
+}
+
+// ── Catalogue ───────────────────────────────────────────────
+
+model Category {
+  id          String     @id @default(cuid())
+  slug        String     @unique
+  nameEn      String
+  nameAr      String
+  descEn      String?
+  descAr      String?
+  parentId    String?
+  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryTree")
+  mediaId     String?
+  sort        Int        @default(0)
+  active      Boolean    @default(true)
+  products    ProductCategory[]
+}
+
+model Collection {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  nameEn      String
+  nameAr      String
+  descEn      String?
+  descAr      String?
+  heroMediaId String?
+  heroVideoId String?
+  thumbnailId String?
+  seoTitle    String?
+  seoDesc     String?
+  sort        Int       @default(0)
+  active      Boolean   @default(true)
+  products    ProductCollection[]
+}
+
+enum ProductType {
+  JEWELLERY
+  BULLION
+}
+
+enum MakingChargeType {
+  PERCENT
+  PER_GRAM
+  FIXED
+}
+
+enum ProductStatus {
+  ACTIVE
+  DRAFT
+}
+
+model Product {
+  id               String           @id @default(cuid())
+  slug             String           @unique
+  sku              String           @unique
+  nameEn           String
+  nameAr           String
+  descEn           String?
+  descAr           String?
+  type             ProductType      @default(JEWELLERY)
+  metalPurityId    String
+  metalPurity      MetalPurity      @relation(fields: [metalPurityId], references: [id])
+  metalColour      String
+  netWeight        Decimal          @db.Decimal(10, 3)
+  grossWeight      Decimal          @db.Decimal(10, 3)
+  makingChargeType MakingChargeType
+  makingCharge     Decimal          @db.Decimal(12, 2)
+  wastagePercent   Decimal          @default(0) @db.Decimal(5, 2)
+  stoneValue       Decimal          @default(0) @db.Decimal(12, 2)
+  stoneDetails     String?
+  diamondCarat     Decimal?         @db.Decimal(6, 2)
+  diamondShape     String?
+  diamondColour    String?
+  diamondClarity   String?
+  diamondPieces    Int?
+  diamondValue     Decimal?         @db.Decimal(12, 2)
+  premium          Decimal          @default(0) @db.Decimal(12, 2)
+  otherCharges     Decimal          @default(0) @db.Decimal(12, 2)
+  discountPercent  Decimal          @default(0) @db.Decimal(5, 2)
+  badges           String[]
+  occasions        String[]
+  gender           String
+  popularity       Int              @default(0)
+  status           ProductStatus    @default(DRAFT)
+  seoTitle         String?
+  seoDesc          String?
+  categories       ProductCategory[]
+  collections      ProductCollection[]
+  variants         ProductVariant[]
+  images           ProductImage[]
+  videos           ProductVideo[]
+  prices           ProductPrice[]
+  inventory        Inventory[]
+  reviews          Review[]
+  certificates     Certificate[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([status])
+}
+
+model ProductCategory {
+  productId  String
+  categoryId String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([productId, categoryId])
+}
+
+model ProductCollection {
+  productId    String
+  collectionId String
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@id([productId, collectionId])
+}
+
+model ProductVariant {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku       String  @unique
+  size      String?
+  netWeight Decimal? @db.Decimal(10, 3)
+  active    Boolean @default(true)
+}
+
+model ProductImage {
+  id        String     @id @default(cuid())
+  productId String
+  product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  mediaId   String
+  media     MediaAsset @relation(fields: [mediaId], references: [id])
+  sort      Int        @default(0)
+}
+
+model ProductVideo {
+  id        String     @id @default(cuid())
+  productId String
+  product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  videoId   String
+  video     VideoAsset @relation(fields: [videoId], references: [id])
+  kind      String     // main | reel | 360 | lifestyle | macro
+  sort      Int        @default(0)
+}
+
+// ── Metals & pricing ────────────────────────────────────────
+
+model Metal {
+  id       String        @id @default(cuid())
+  key      String        @unique // gold | silver | platinum
+  nameEn   String
+  nameAr   String
+  purities MetalPurity[]
+}
+
+model MetalPurity {
+  id       String       @id // e.g. "gold-22k"
+  metalId  String
+  metal    Metal        @relation(fields: [metalId], references: [id])
+  purity   String       // 24K, 22K, 21K, 18K, 999
+  rates    MetalRate[]
+  products Product[]
+}
+
+model MetalRate {
+  id            String             @id @default(cuid())
+  metalPurityId String             @unique
+  metalPurity   MetalPurity        @relation(fields: [metalPurityId], references: [id])
+  ratePerGram   Decimal            @db.Decimal(12, 2) // QAR
+  source        String
+  status        String             // live | manual | stale
+  updatedAt     DateTime           @updatedAt
+  history       MetalRateHistory[]
+}
+
+model MetalRateHistory {
+  id          String    @id @default(cuid())
+  metalRateId String
+  metalRate   MetalRate @relation(fields: [metalRateId], references: [id], onDelete: Cascade)
+  ratePerGram Decimal   @db.Decimal(12, 2)
+  source      String
+  by          String
+  at          DateTime  @default(now())
+
+  @@index([metalRateId, at])
+}
+
+model PricingRule {
+  id        String   @id @default(cuid())
+  key       String   @unique // taxRate | deliveryFee | freeDeliveryThreshold | priceLockMinutes
+  value     Decimal  @db.Decimal(12, 2)
+  updatedAt DateTime @updatedAt
+}
+
+model ProductPrice {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  breakdown   Json
+  total       Decimal  @db.Decimal(12, 2)
+  computedAt  DateTime @default(now())
+
+  @@index([productId, computedAt])
+}
+
+model PriceSnapshot {
+  id          String    @id @default(cuid())
+  orderItemId String    @unique
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  ratePerGram Decimal   @db.Decimal(12, 2)
+  breakdown   Json      // metal, making, wastage, stones, diamonds, premium, tax, discount
+  takenAt     DateTime  @default(now())
+}
+
+model PriceLock {
+  id        String   @id @default(cuid())
+  cartId    String
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String
+  total     Decimal  @db.Decimal(12, 2)
+  expiresAt DateTime
+}
+
+// ── Branches & inventory ────────────────────────────────────
+
+model Branch {
+  id           String              @id @default(cuid())
+  nameEn       String
+  nameAr       String
+  addressEn    String
+  addressAr    String
+  zone         String?
+  area         String?
+  city         String
+  landmark     String?
+  phone        String?
+  whatsapp     String?
+  mapUrl       String?
+  lat          Decimal?            @db.Decimal(9, 6)
+  lng          Decimal?            @db.Decimal(9, 6)
+  hoursEn      String?
+  hoursAr      String?
+  imageIds     String[]
+  videoId      String?
+  services     String[]
+  active       Boolean             @default(true)
+  sort         Int                 @default(0)
+  locations    InventoryLocation[]
+  appointments Appointment[]
+  staff        User[]
+}
+
+model InventoryLocation {
+  id        String      @id @default(cuid())
+  branchId  String
+  branch    Branch      @relation(fields: [branchId], references: [id])
+  name      String      // showroom floor, vault, online
+  inventory Inventory[]
+}
+
+model Inventory {
+  id           String                 @id @default(cuid())
+  productId    String
+  product      Product                @relation(fields: [productId], references: [id], onDelete: Cascade)
+  locationId   String
+  location     InventoryLocation      @relation(fields: [locationId], references: [id])
+  total        Int                    @default(0)
+  reserved     Int                    @default(0)
+  sold         Int                    @default(0)
+  returned     Int                    @default(0)
+  damaged      Int                    @default(0)
+  transferred  Int                    @default(0)
+  transactions InventoryTransaction[]
+  reservations StockReservation[]
+
+  @@unique([productId, locationId])
+}
+
+model InventoryTransaction {
+  id          String    @id @default(cuid())
+  inventoryId String
+  inventory   Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  kind        String    // adjust | reserve | release | sale | return | damage | transfer-in | transfer-out
+  qty         Int
+  note        String?
+  by          String
+  at          DateTime  @default(now())
+}
+
+model StockReservation {
+  id          String    @id @default(cuid())
+  inventoryId String
+  inventory   Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  orderId     String
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  qty         Int
+  expiresAt   DateTime
+  releasedAt  DateTime?
+}
+
+// ── Cart / wishlist ─────────────────────────────────────────
+
+model Cart {
+  id         String      @id @default(cuid())
+  userId     String?     @unique
+  user       User?       @relation(fields: [userId], references: [id])
+  guestToken String?     @unique
+  couponCode String?
+  items      CartItem[]
+  locks      PriceLock[]
+  updatedAt  DateTime    @updatedAt
+}
+
+model CartItem {
+  id        String  @id @default(cuid())
+  cartId    String
+  cart      Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String
+  variantId String?
+  size      String?
+  engraving String?
+  qty       Int
+}
+
+model Wishlist {
+  id     String         @id @default(cuid())
+  userId String         @unique
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items  WishlistItem[]
+}
+
+model WishlistItem {
+  id         String   @id @default(cuid())
+  wishlistId String
+  wishlist   Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  productId  String
+  addedAt    DateTime @default(now())
+
+  @@unique([wishlistId, productId])
+}
+
+// ── Orders & payments ───────────────────────────────────────
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  READY_FOR_PICKUP
+  DELIVERED
+  CANCELLED
+  REFUNDED
+  PAYMENT_FAILED
+}
+
+model Order {
+  id             String               @id @default(cuid())
+  number         String               @unique
+  userId         String?
+  user           User?                @relation(fields: [userId], references: [id])
+  customerName   String
+  email          String
+  phone          String
+  fulfilment     String               // delivery | pickup
+  address        Json?
+  pickupBranchId String?
+  subtotal       Decimal              @db.Decimal(12, 2)
+  couponCode     String?
+  couponDiscount Decimal              @default(0) @db.Decimal(12, 2)
+  deliveryFee    Decimal              @default(0) @db.Decimal(12, 2)
+  tax            Decimal              @default(0) @db.Decimal(12, 2)
+  total          Decimal              @db.Decimal(12, 2)
+  status         OrderStatus          @default(PENDING_PAYMENT)
+  items          OrderItem[]
+  history        OrderStatusHistory[]
+  payments       Payment[]
+  shipments      Shipment[]
+  reservations   StockReservation[]
+  couponUsage    CouponUsage[]
+  createdAt      DateTime             @default(now())
+
+  @@index([status, createdAt])
+}
+
+model OrderItem {
+  id        String         @id @default(cuid())
+  orderId   String
+  order     Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  sku       String
+  nameEn    String
+  nameAr    String
+  qty       Int
+  size      String?
+  engraving String?
+  unitPrice Decimal        @db.Decimal(12, 2)
+  branchId  String
+  snapshot  PriceSnapshot?
+}
+
+model OrderStatusHistory {
+  id      String      @id @default(cuid())
+  orderId String
+  order   Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status  OrderStatus
+  note    String?
+  by      String?
+  at      DateTime    @default(now())
+}
+
+model Payment {
+  id           String               @id @default(cuid())
+  orderId      String
+  order        Order                @relation(fields: [orderId], references: [id])
+  provider     String
+  reference    String               @unique
+  amount       Decimal              @db.Decimal(12, 2)
+  status       String               // pending | succeeded | failed | refunded
+  transactions PaymentTransaction[]
+  createdAt    DateTime             @default(now())
+}
+
+model PaymentTransaction {
+  id             String   @id @default(cuid())
+  paymentId      String
+  payment        Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  kind           String   // session | webhook | refund
+  idempotencyKey String   @unique
+  status         String
+  raw            Json?    // provider payload (never card data)
+  at             DateTime @default(now())
+}
+
+model Shipment {
+  id        String    @id @default(cuid())
+  orderId   String
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  carrier   String?
+  tracking  String?
+  status    String
+  shippedAt DateTime?
+  deliveredAt DateTime?
+}
+
+model Coupon {
+  id          String        @id @default(cuid())
+  code        String        @unique
+  type        String        // percent | fixed
+  value       Decimal       @db.Decimal(12, 2)
+  minSubtotal Decimal       @default(0) @db.Decimal(12, 2)
+  usageLimit  Int           @default(0)
+  used        Int           @default(0)
+  active      Boolean       @default(true)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  usages      CouponUsage[]
+}
+
+model CouponUsage {
+  id       String   @id @default(cuid())
+  couponId String
+  coupon   Coupon   @relation(fields: [couponId], references: [id])
+  orderId  String
+  order    Order    @relation(fields: [orderId], references: [id])
+  at       DateTime @default(now())
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  name      String
+  rating    Int
+  text      String
+  approved  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Certificate {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  number    String   @unique
+  lab       String?
+  fileId    String?  // MediaAsset in "Certificates" folder
+  createdAt DateTime @default(now())
+}
+
+model Appointment {
+  id         String   @id @default(cuid())
+  branchId   String
+  branch     Branch   @relation(fields: [branchId], references: [id])
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  service    String
+  date       DateTime @db.Date
+  time       String
+  name       String
+  phone      String
+  email      String
+  notes      String?
+  productId  String?
+  status     String   @default("requested")
+  createdAt  DateTime @default(now())
+
+  @@unique([branchId, date, time])
+}
+
+model PersonalisationRequest {
+  id               String   @id @default(cuid())
+  type             String
+  text             String?
+  notes            String?
+  referenceMediaId String?
+  name             String
+  phone            String
+  email            String
+  userId           String?
+  status           String   @default("new")
+  createdAt        DateTime @default(now())
+}
+
+model Notification {
+  id      String   @id @default(cuid())
+  userId  String?
+  user    User?    @relation(fields: [userId], references: [id])
+  channel String   // email | sms | whatsapp | push
+  event   String
+  to      String
+  message String
+  status  String   @default("queued")
+  sentAt  DateTime?
+  at      DateTime @default(now())
+}
+
+// ── CMS / media / theme ─────────────────────────────────────
+
+model CMSPage {
+  id      String  @id @default(cuid())
+  slug    String  @unique
+  titleEn String
+  titleAr String
+  bodyEn  String
+  bodyAr  String
+  seoTitle String?
+  seoDesc  String?
+  active  Boolean @default(true)
+}
+
+model Banner {
+  id          String  @id @default(cuid())
+  type        String  // hero | categories | featuredCollection | … (homepage sections)
+  enabled     Boolean @default(true)
+  sort        Int     @default(0)
+  content     Json    // eyebrow/title/body/cta (en+ar)
+  mediaId     String?
+  mobileMediaId String?
+  videoId     String?
+  collectionId String?
+}
+
+model Blog {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  titleEn     String
+  titleAr     String
+  bodyEn      String
+  bodyAr      String
+  coverId     String?
+  publishedAt DateTime?
+}
+
+model MediaAsset {
+  id          String         @id @default(cuid())
+  title       String
+  altEn       String?
+  altAr       String?
+  caption     String?
+  description String?
+  folder      String
+  tags        String[]
+  url         String         // CDN URL (S3/R2/etc.)
+  mobileUrl   String?
+  mime        String?
+  size        Int?
+  width       Int?
+  height      Int?
+  focalX      Int?
+  focalY      Int?
+  status      String         @default("active")
+  productImages ProductImage[]
+  createdAt   DateTime       @default(now())
+}
+
+model VideoAsset {
+  id          String         @id @default(cuid())
+  title       String
+  description String?
+  posterId    String?
+  desktopUrl  String
+  mobileUrl   String?
+  autoplay    Boolean        @default(true)
+  muted       Boolean        @default(true)
+  loop        Boolean        @default(true)
+  controls    Boolean        @default(false)
+  aspectRatio String?
+  startTime   Float?
+  endTime     Float?
+  videoType   String
+  status      String         @default("active")
+  productVideos ProductVideo[]
+  createdAt   DateTime       @default(now())
+}
+
+model SocialLink {
+  id       String  @id @default(cuid())
+  platform String
+  url      String
+  icon     String?
+  active   Boolean @default(true)
+  sort     Int     @default(0)
+}
+
+model Theme {
+  id        String         @id @default(cuid())
+  name      String
+  presetId  String?
+  preset    ThemePreset?   @relation(fields: [presetId], references: [id])
+  tokens    Json
+  draft     Json?
+  active    Boolean        @default(false)
+  versions  ThemeVersion[]
+  updatedAt DateTime       @updatedAt
+}
+
+model ThemePreset {
+  id     String  @id
+  name   String
+  tokens Json
+  themes Theme[]
+}
+
+model ThemeVersion {
+  id          String   @id @default(cuid())
+  themeId     String
+  theme       Theme    @relation(fields: [themeId], references: [id], onDelete: Cascade)
+  tokens      Json
+  publishedBy String
+  publishedAt DateTime @default(now())
+}
+
+model Translation {
+  id    String @id @default(cuid())
+  lang  String
+  key   String
+  value String
+
+  @@unique([lang, key])
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id       String   @id @default(cuid())
+  userId   String?
+  user     String
+  action   String
+  entity   String
+  entityId String
+  oldValue Json?
+  newValue Json?
+  ip       String?
+  at       DateTime @default(now())
+
+  @@index([entity, at])
+}
+
+model Redirect {
+  id     String @id @default(cuid())
+  from   String @unique // legacy URLs from the current site
+  to     String
+  status Int    @default(301)
+}

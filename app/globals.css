@@ -1,0 +1,6 @@
+/* Loaded for every route. App-specific styles are imported by each app layout:
+   app/(user)/layout.tsx → user/styles/index.css · app/admin/layout.tsx → admin/styles/index.css */
+@import "../shared/styles/tokens.css";
+@import "../shared/styles/base.css";
+@import "../shared/styles/primitives.css";
+@import "../shared/styles/animations.css";

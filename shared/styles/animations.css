@@ -1,0 +1,15 @@
+/* Motion — every duration is scaled by the theme's animation speed token. */
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rise-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes mega-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@keyframes slide-in-start { from { transform: translateX(-100%); } to { transform: none; } }
+@keyframes slide-in-end { from { transform: translateX(100%); } to { transform: none; } }
+[dir="rtl"] .drawer { animation-name: slide-in-end; }
+[dir="rtl"] .drawer--end { animation-name: slide-in-start; }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@keyframes slow-zoom { from { transform: scale(1.08); } to { transform: scale(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  .reveal { opacity: 1; transform: none; }
+}
