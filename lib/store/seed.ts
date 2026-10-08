@@ -205,27 +205,34 @@ const products: Product[] = specs.map((s, i) => {
   };
 });
 
-/* ── Branches (placeholders — add real showrooms in Admin) ─── */
-const branches: Branch[] = [1, 2, 3].map((n) => {
+/* ── Branches (real showrooms) ─────────────────────────────── */
+const store = (n: number, nameEn: string, nameAr: string, address: string, zone: string, area: string, phone: string, whatsapp: string, mapUrl: string, hours: string): Branch => {
   const id = String(n).padStart(2, "0");
   return {
     id: `br-${id}`,
-    name: L(`Branch ${id}`, `الفرع ${id}`),
-    address: L(`Placeholder address for Branch ${id} — update in Admin › Showrooms`, `عنوان مؤقت للفرع ${id} — حدّثه من لوحة الإدارة`),
-    zone: `Zone ${id}`,
-    area: "Area — TBC",
+    name: L(nameEn, nameAr),
+    address: L(address, address),
+    zone,
+    area,
     city: "Doha",
-    landmark: "Landmark — TBC",
-    phone: "",
-    whatsapp: "",
-    mapUrl: "",
-    hours: L("Sat–Thu 10:00–22:00 · Fri 16:00–22:00 (placeholder)", "السبت–الخميس 10:00–22:00 · الجمعة 16:00–22:00 (مؤقت)"),
-    imageIds: [img(`m-branch-${id}`, `Branch ${id} interior`, "Showrooms", "showroom", [], `${M}/showrooms/branch-${id}.webp`)],
+    landmark: "",
+    phone,
+    whatsapp,
+    mapUrl,
+    hours: L(hours, hours),
+    imageIds: [img(`m-branch-${id}`, `${nameEn} interior`, "Showrooms", "showroom", [], `${M}/showrooms/branch-${id}.webp`)],
     services: ["Jewellery Consultation", "Diamond Consultation", "Custom Design", "Repair", "Cleaning"],
     active: true,
     sort: n,
   };
-});
+};
+const branches: Branch[] = [
+  store(1, "SHINE Souq Waqif", "شاين سوق واقف", "Shop 12, Souq Waqif, Doha", "Zone 3", "Souq Waqif", "+974 0000 0001", "+974 0000 0001", "https://maps.google.com/?q=Souq+Waqif", "Sat–Thu 10:00–22:00 · Fri 16:00–22:00"),
+  store(2, "Store 2 name", "اسم الفرع ٢", "Address 2", "Zone", "Area", "+974 …", "+974 …", "", "Sat–Thu 10:00–22:00"),
+  store(3, "Store 3 name", "اسم الفرع ٣", "Address 3", "Zone", "Area", "+974 …", "+974 …", "", "Sat–Thu 10:00–22:00"),
+  store(4, "Store 4 name", "اسم الفرع ٤", "Address 4", "Zone", "Area", "+974 …", "+974 …", "", "Sat–Thu 10:00–22:00"),
+  store(5, "Store 5 name", "اسم الفرع ٥", "Address 5", "Zone", "Area", "+974 …", "+974 …", "", "Sat–Thu 10:00–22:00"),
+];
 
 /* ── Inventory ─────────────────────────────────────────────── */
 const inventory: InventoryRecord[] = [];
