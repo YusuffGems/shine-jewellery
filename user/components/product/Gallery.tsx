@@ -30,7 +30,7 @@ export function Gallery({ product }: { product: Product }) {
       </div>
       <div className={`gallery-main${zoom ? " zooming" : ""}`} onMouseMove={onMove} onMouseLeave={() => setZoom(null)}>
         {current ? (
-          <Media
+                   <Media
             key={current.id}
             mediaId={current.kind === "image" ? current.id : undefined}
             videoId={current.kind === "video" ? current.id : undefined}
@@ -38,8 +38,10 @@ export function Gallery({ product }: { product: Product }) {
             kind={current.kind === "video" ? "video" : "product"}
             priority
             controls={current.kind === "video"}
+            playInView={false}
             style={zoom ? { transformOrigin: `${zoom.x}% ${zoom.y}%` } : undefined}
           />
+                 
         ) : (
           <Media kind="product" />
         )}

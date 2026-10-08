@@ -81,6 +81,7 @@ export function CategoriesSection({ s }: P) {
 
   // Actual videos from public/media/videos/
   const categoryVideos: Record<string, string> = {
+    
     rings: "/media/videos/rings.mp4",
     earrings: "/media/videos/earrings.mp4",
     necklaces: "/media/videos/necklaces.mp4",
@@ -178,8 +179,18 @@ export function FeaturedCollectionSection({ s }: P) {
   return (
     <section className="section section--surface">
       <div className="container feature">
-        <div className="feature-media reveal">
-          <Media mediaId={s.mediaId || col?.heroMediaId} videoId={s.videoId || col?.heroVideoId} kind="collection" />
+               <div className="feature-media reveal">
+          <div className="media" style={{ aspectRatio: "4/5" }}>
+            <video
+              src="/media/videos/dimond-nekles.mp4"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="auto"
+              aria-label={L(s.title)}
+            />
+          </div>
         </div>
         <div className="feature-body reveal">
           <span className="eyebrow">{L(s.eyebrow)}</span>
@@ -265,24 +276,20 @@ export function EditorialSection({ s }: P) {
 }
 
 export function VideoStorySection({ s }: P) {
-  const { t, L } = useI18n();
-  const [playing, setPlaying] = useState(false);
+  const { L } = useI18n();
+  const FILM = "/media/videos/story1.mp4"; // ← change the film here
+  const HEIGHT = "clamp(300px, 50vh, 520px)"; // ← change the section height here
   return (
     <section className="video-story">
-      <div className="video-frame">
-        <Media mediaId={s.mediaId} videoId={playing ? s.videoId : undefined} kind="video" dark controls={playing} />
-        {!playing ? (
-          <button className="play-btn" onClick={() => (setPlaying(true), track("video_play", { section: s.id }))} aria-label={t("home.playFilm")}>
-            <Icon name="play" size={26} />
-          </button>
-        ) : null}
-        {!playing ? (
-          <div className="video-caption">
-            <span className="eyebrow" style={{ color: "var(--color-gold-soft)" }}>{L(s.eyebrow)}</span>
-            <h2 className="section-title">{L(s.title)}</h2>
-            <p>{L(s.body)}</p>
-          </div>
-        ) : null}
+      <div className="video-frame" style={{ aspectRatio: "auto", height: HEIGHT }}>
+        <div className="media">
+          <video src={FILM} autoPlay muted loop playsInline preload="auto" aria-label={L(s.title)} />
+        </div>
+        <div className="video-caption">
+          <span className="eyebrow" style={{ color: "var(--color-gold-soft)" }}>{L(s.eyebrow)}</span>
+          <h2 className="section-title">{L(s.title)}</h2>
+          <p>{L(s.body)}</p>
+        </div>
       </div>
     </section>
   );

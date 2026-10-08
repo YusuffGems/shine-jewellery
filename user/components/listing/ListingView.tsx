@@ -51,6 +51,29 @@ export function ListingView({ slug }: { slug: string }) {
   const desc = listing.kind === "category" ? L(listing.category.description) : listing.kind === "collection" ? L(listing.collection.description) : t("listing.allDescription");
   const heroMedia = listing.kind === "collection" ? listing.collection.heroMediaId : listing.kind === "category" ? listing.category.mediaId : undefined;
   const heroVideo = listing.kind === "collection" ? listing.collection.heroVideoId : undefined;
+
+  // ── Page banners: one video per category / collection page ──────────────
+  // Key = the last part of the page address (/collections/<key>). Value = video file in /public.
+  // Pages not listed here keep their default image.
+   const bannerVideos: Record<string, string> = {
+    // Top menu
+    "gold-jewellery": "/media/videos/gold.mp4",
+    "diamond-jewellery": "/media/videos/diamond.mp4",
+    "platinum-jewellery": "/media/videos/platinum.mp4",
+    "silver-jewellery": "/media/videos/silver.mp4",
+    rings: "/media/videos/rings.mp4",
+    earrings: "/media/videos/earrings.mp4",
+    necklaces: "/media/videos/necklaces.mp4",
+    bracelets: "/media/videos/bracelets.mp4",
+    bangles: "/media/videos/bangles.mp4",
+    pendants: "/media/videos/pendants.mp4",
+    "gold-coins": "/media/videos/gold-coins.mp4",
+    gifting: "/media/videos/gifting.mp4",
+    // Collections
+    "diamond-stories": "/media/videos/dimond-nekles.mp4",
+  };
+  const pageSlug = listing.kind === "category" ? listing.category.slug : listing.kind === "collection" ? listing.collection.slug : "";
+  const bannerVideo = bannerVideos[pageSlug];
   const activeChips = (Object.entries(sel) as [FacetKey, string[]][]).flatMap(([k, vs]) => vs.map((v) => ({ k, v })));
 
   const crumbs = (
@@ -63,9 +86,15 @@ export function ListingView({ slug }: { slug: string }) {
 
   return (
     <>
-      {heroMedia ? (
+      {bannerVideo || heroMedia ? (
         <section className="plp-hero">
-          <Media mediaId={heroMedia} videoId={heroVideo} kind="collection" dark priority />
+          {bannerVideo ? (
+            <div className="media">
+              <video key={bannerVideo} src={bannerVideo} autoPlay muted loop playsInline preload="auto" aria-hidden="true" />
+            </div>
+          ) : (
+            <Media mediaId={heroMedia} videoId={heroVideo} kind="collection" dark priority />
+          )}
           <div className="container plp-hero-inner">
             {crumbs}
             <h1>{title}</h1>

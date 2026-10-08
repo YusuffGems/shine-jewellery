@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useDb } from "@/shared/hooks/useDb";
+import { useMediaUrl } from "@/shared/hooks/useMediaUrl";
 import { useI18n } from "@/shared/hooks/useI18n";
 import { storefrontTokens } from "@/lib/theme/resolve";
 import { priceOf, stockOf } from "@/shared/services/catalog";
@@ -23,11 +24,40 @@ export function ProductCard({ product }: { product: Product }) {
   const metalLabel = d.rates.find((r) => r.id === product.rateId);
   const name = L(product.name);
 
+  // Hover video: plays when the mouse enters the card, stops and rewinds when it leaves.
+  const videoAsset = d.media.find((m) => m.id === product.videoIds?.[0] && m.status === "active");
+  const videoUrl = useMediaUrl(videoAsset?.url);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [hover, setHover] = useState(false);
+  const [videoFailed, setVideoFailed] = useState(false);
+  const startVideo = () => {
+    setHover(true);
+    videoRef.current?.play().catch(() => undefined);
+  };
+  const stopVideo = () => {
+    setHover(false);
+    const v = videoRef.current;
+    if (v) { v.pause(); v.currentTime = 0; }
+  };
+
   return (
-    <article className="pcard" data-bordered={tokens.cardBorder}>
+    <article className="pcard" data-bordered={tokens.cardBorder} onMouseEnter={startVideo} onMouseLeave={stopVideo}>
       <div className="pcard-media">
         <Media className="pcard-main" mediaId={product.imageIds[0]} alt={name} kind="product" showVideoBadge={false} />
         {product.imageIds[1] ? <Media className="pcard-alt" mediaId={product.imageIds[1]} alt="" kind="product" /> : null}
+        {videoUrl ? (
+          <video
+            ref={videoRef}
+            src={videoUrl}
+            muted
+            loop
+            playsInline
+            preload="none"
+            aria-hidden="true"
+            onError={() => setVideoFailed(true)}
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: hover && !videoFailed ? 1 : 0, transition: "opacity 0.4s ease", pointerEvents: "none", zIndex: 1 }}
+          />
+        ) : null}
         {product.badges.length ? (
           <div className="pcard-badges">
             {product.badges.slice(0, 2).map((b) => (

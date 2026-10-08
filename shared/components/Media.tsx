@@ -119,7 +119,7 @@ function AutoVideo({ asset, src, poster, playInView, controls }: { asset: MediaA
       poster={poster}
       muted={asset.muted ?? true}
       loop={asset.loop ?? true}
-      autoPlay={!controls && !reduceMotion && (asset.autoplay ?? true) && !playInView}
+            autoPlay={!reduceMotion && (asset.autoplay ?? true) && !playInView}
       controls={controls ?? asset.controls}
       playsInline
       preload="metadata"
