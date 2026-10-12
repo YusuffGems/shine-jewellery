@@ -45,15 +45,26 @@ export default function DashboardPage() {
       </div>
 
       <div className="a-grid-2" style={{ marginTop: "1.25rem" }}>
-        <div className="a-card">
+              <div className="a-card" style={{ minWidth: 0 }}>
           <h2>{t("admin.dashboard.recentOrders")}<Link href="/admin/orders" className="btn btn--ghost btn--sm">{t("listing.viewAll")}</Link></h2>
-          <table className="table">
-            <tbody>
-              {d.orders.slice(0, 6).map((o) => (
-                <tr key={o.id}><td className="ltr">{o.number}</td><td>{o.customerName}</td><td>{date(o.createdAt)}</td><td><StatusBadge value={o.status} /></td><td className="num">{money(o.total)}</td></tr>
-              ))}
-            </tbody>
-          </table>
+          <div style={{ overflowX: "auto", maxWidth: "100%" }}>
+            <table className="table recent-orders">
+              <tbody>
+                {d.orders.slice(0, 6).map((o) => (
+                  <tr key={o.id}>
+                    <td>
+                      <span className="ltr">{o.number}</span>
+                      <br />
+                      <small className="muted">{date(o.createdAt)}</small>
+                    </td>
+                    <td>{o.customerName}</td>
+                    <td><StatusBadge value={o.status} /></td>
+                    <td className="num">{money(o.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
         <div className="a-card">
           <h2>{t("admin.dashboard.orderCount")}</h2>

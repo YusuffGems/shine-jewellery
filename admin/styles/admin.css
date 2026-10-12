@@ -214,3 +214,11 @@
 .asset-slot-info { display: grid; gap: 0.15rem; font-size: 0.82rem; }
 .asset-slot-info b { font-weight: 500; }
 .asset-slot-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+
+
+/* Dashboard: keep cards and the recent-orders table inside their box */
+.a-grid-2 > *, .a-grid-3 > * { min-width: 0; }
+.recent-orders td { padding: 0.75rem 0.5rem; }
+.recent-orders td.num, .recent-orders td:first-child { white-space: nowrap; }
+.recent-orders td:first-child { padding-inline-start: 0; }
+.recent-orders td:last-child { padding-inline-end: 0; }

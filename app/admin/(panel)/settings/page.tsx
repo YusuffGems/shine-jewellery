@@ -10,7 +10,7 @@ import { RequirePermission } from "@/admin/layout/AdminShell";
 import { useToast } from "@/shared/components/Toast";
 import type { Settings } from "@/types";
 
-export default function SettingsPage() {
+export default function SettingsPage() {  
   const d = useDb();
   const { t } = useI18n();
   const toast = useToast();
