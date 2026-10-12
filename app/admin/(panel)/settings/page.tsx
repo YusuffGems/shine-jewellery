@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useDb } from "@/shared/hooks/useDb";
 import { useI18n } from "@/shared/hooks/useI18n";
 import { db } from "@/lib/store/db";
+import { pullCloud } from "@/lib/store/cloudSync";
 import { saveSettings } from "@/admin/services/content";
 import { PageHead } from "@/admin/components/ui";
 import { RequirePermission } from "@/admin/layout/AdminShell";
@@ -57,7 +58,7 @@ export default function SettingsPage() {
             if (!f) return;
             try { db.importJson(await f.text()); toast(t("common.saved")); } catch { toast(t("admin.settings.importFailed"), "error"); }
           }} /></label>
-          <button className="btn btn--danger" onClick={() => window.confirm(t("admin.settings.resetConfirm")) && (db.reset(), toast(t("admin.settings.resetDone")))}>{t("admin.settings.reset")}</button>
+          <button className="btn btn--danger" onClick={() => window.confirm(t("admin.settings.resetConfirm")) && (db.reset(), void pullCloud(), toast(t("admin.settings.resetDone")))}>{t("admin.settings.reset")}</button>
         </div>
       </div>
     </RequirePermission>

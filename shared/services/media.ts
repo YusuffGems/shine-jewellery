@@ -3,6 +3,7 @@ import { db } from "@/lib/store/db";
 import { nowIso, uid } from "@/lib/utils";
 import { writeAudit } from "@/shared/services/core";
 import { dataUrlToBlob, putBlob } from "@/lib/media/blobStore";
+import { uploadToCloud } from "@/lib/store/cloudSync";
 import type { MediaAsset, MediaFolder } from "@/types";
 
 export const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif", "image/svg+xml"];
@@ -35,7 +36,16 @@ async function readImage(file: File): Promise<Blob> {
 }
 
 export async function storeFile(id: string, file: File, isImage: boolean): Promise<string> {
-  return putBlob(id, isImage ? await readImage(file) : file);
+  const blob = isImage ? await readImage(file) : file;
+  try {
+    const ext = blob.type === "image/webp" ? "webp" : (file.name.split(".").pop() || "bin");
+    const online = await uploadToCloud(id, blob, `${file.name.replace(/\.[^.]+$/, "")}.${ext}`);
+    if (online) return online;
+  } catch {
+    /* online upload failed — keep it in this browser instead */
+  }
+  return putBlob(id, blob);
+
 }
 
 export async function uploadFiles(files: FileList | File[], folder: MediaFolder): Promise<{ ids: string[]; rejected: string[] }> {

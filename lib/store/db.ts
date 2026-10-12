@@ -1,12 +1,4 @@
-/* ──────────────────────────────────────────────────────────────
-   Mock database (browser).
-   A tiny observable store persisted to localStorage so every admin
-   change shows up on the storefront immediately — no backend needed.
-
-   Services in /services are the ONLY callers of db.update().
-   To go live, replace service internals with fetch() to /api/*
-   (see docs/API-INTEGRATION.md); components and hooks stay the same.
-   ────────────────────────────────────────────────────────────── */
+/* Mock database (browser), persisted to localStorage + shared online copy (cloudSync.ts). */
 import type { Database } from "@/types";
 import { SEED, createSeed } from "./seed";
 
@@ -17,6 +9,8 @@ let state: Database = SEED;
 let hydrated = false;
 const listeners = new Set<Listener>();
 const errorListeners = new Set<(msg: string) => void>();
+const writeListeners = new Set<Listener>();
+const notifyWrite = () => writeListeners.forEach((l) => l());
 
 function emit() {
   listeners.forEach((l) => l());
@@ -31,7 +25,6 @@ function persist() {
   }
 }
 
-/** Fill in keys added in newer seed versions without wiping user data. */
 function migrate(raw: Partial<Database>): Database {
   const fresh = createSeed();
   const merged = { ...fresh, ...raw } as Database;
@@ -43,10 +36,6 @@ function migrate(raw: Partial<Database>): Database {
   return merged;
 }
 
-/**
- * v2: brand logo + generated placeholder media + product videos + "SHINE Signature" theme.
- * Only fills empty slots — anything the admin already uploaded or edited is kept.
- */
 function upgradeToV2(d: Database, fresh: Database) {
   for (const f of fresh.media) {
     const cur = d.media.find((m) => m.id === f.id);
@@ -74,7 +63,6 @@ export const db = {
   get(): Database {
     return state;
   },
-  /** Server snapshot = seed; avoids hydration mismatch. */
   getServerSnapshot(): Database {
     return SEED;
   },
@@ -86,7 +74,6 @@ export const db = {
     errorListeners.add(listener);
     return () => errorListeners.delete(listener);
   },
-  /** Load persisted state once on the client. */
   hydrate() {
     if (hydrated || typeof window === "undefined") return;
     hydrated = true;
@@ -103,20 +90,41 @@ export const db = {
         state = migrate(JSON.parse(e.newValue));
         emit();
       } catch {
-        /* ignore malformed cross-tab payloads */
+        /* ignore */
       }
     });
   },
   isHydrated() {
     return hydrated;
   },
-  /** Immutable update: mutate the draft, it becomes the new state. */
   update(mutator: (draft: Database) => void) {
     const draft = structuredClone(state);
     mutator(draft);
     state = draft;
     persist();
     emit();
+    notifyWrite();
+  },
+  onWrite(listener: Listener): () => void {
+    writeListeners.add(listener);
+    return () => writeListeners.delete(listener);
+  },
+  applyRemote(remote: Partial<Database>) {
+    const local = state;
+    const merged = migrate({ ...local, ...remote, session: local.session } as Partial<Database>);
+    if (merged.adminUsers) {
+      merged.adminUsers = merged.adminUsers.map((u) => (u.passwordHash ? u : { ...u, passwordHash: local.adminUsers.find((x) => x.id === u.id)?.passwordHash ?? "" }));
+    }
+    if (merged.customers) {
+      merged.customers = merged.customers.map((c) => (c.passwordHash ? c : { ...c, passwordHash: local.customers.find((x) => x.id === c.id)?.passwordHash ?? "" }));
+    }
+    state = merged;
+    persist();
+    emit();
+  },
+  syncPayload(): Partial<Database> {
+    const { session: _s, ...rest } = state;
+    return rest;
   },
   reset() {
     state = createSeed();
@@ -127,8 +135,9 @@ export const db = {
     return JSON.stringify(state, null, 2);
   },
   importJson(json: string) {
-    state = migrate(JSON.parse(json));
+    state = migrate({ ...JSON.parse(json), session: state.session });
     persist();
     emit();
+    notifyWrite();
   },
 };

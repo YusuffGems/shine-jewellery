@@ -4,6 +4,8 @@ import { hashPassword, passwordStrongEnough, verifyPassword } from "@/lib/auth/h
 import { canAccessAdmin } from "@/lib/auth/rbac";
 import { nowIso, uid } from "@/lib/utils";
 import { writeAudit } from "@/shared/services/core";
+import { afterAdminLogin, cloudLogin, cloudLogout } from "@/lib/store/cloudSync";
+import type { AdminUser } from "@/types";
 
 const MAX_ATTEMPTS = 5;
 
@@ -12,6 +14,31 @@ const LOCK_MINUTES = 15;
 /* ── Admin ─────────────────────────────────────────────────── */
 export async function loginAdmin(email: string, password: string, remember: boolean): Promise<{ ok: boolean; error?: "invalid_credentials" | "locked" | "inactive" }> {
   const lower = email.trim().toLowerCase();
+
+  // 1) Online sign-in (when the Vercel Blob store is connected) — same login on every device.
+  const cloud = await cloudLogin(lower, password);
+  if (cloud.result === "inactive") return { ok: false, error: "inactive" };
+  if (cloud.result === "ok" && cloud.user) {
+    const remote = cloud.user as unknown as AdminUser;
+    if (!cloud.firstRun) await afterAdminLogin(false); // get the latest online data first
+    db.update((d) => {
+      let user = d.adminUsers.find((x) => x.id === remote.id);
+      if (!user) {
+        user = { ...remote, passwordHash: "" };
+        d.adminUsers.push(user);
+      }
+      user.failedAttempts = 0;
+      user.lockedUntil = undefined;
+      user.lastLoginAt = nowIso();
+      d.session.adminId = user.id;
+      d.session.adminExpiresAt = new Date(Date.now() + (remember ? 7 * 24 : 8) * 3_600_000).toISOString();
+      writeAudit(d, "login", "adminUsers", user.id);
+    });
+    if (cloud.firstRun) await afterAdminLogin(true); // first time ever: publish this browser's data
+    return { ok: true };
+  }
+
+  // 2) Browser-only sign-in (online storage not connected yet).
   const u = db.get().adminUsers.find((x) => x.email === lower);
   if (u?.lockedUntil && Date.parse(u.lockedUntil) > Date.now()) return { ok: false, error: "locked" };
   const ok = !!u && (await verifyPassword(password, u.passwordHash));
@@ -45,6 +72,7 @@ export async function loginAdmin(email: string, password: string, remember: bool
 }
 
 export function logoutAdmin() {
+  cloudLogout();
   db.update((d) => {
     writeAudit(d, "logout", "adminUsers", d.session.adminId ?? "");
     d.session.adminId = undefined;

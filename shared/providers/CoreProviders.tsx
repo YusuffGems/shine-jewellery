@@ -10,6 +10,7 @@ import { storefrontTokens } from "@/lib/theme/resolve";
 import { GOOGLE_FONTS_HREF } from "@/lib/theme/tokens";
 import { ToastProvider } from "@/shared/components/Toast";
 import { migrateInlineMedia } from "@/shared/services/media";
+import { startCloudSync } from "@/lib/store/cloudSync";
 
 function DocumentSync() {
   const d = useDb();
@@ -41,6 +42,7 @@ export function CoreProviders({ children }: { children: ReactNode }) {
   useEffect(() => {
     db.hydrate();
     void migrateInlineMedia();
+        startCloudSync();
     if (!document.querySelector("link[data-shine-fonts]")) {
       const link = Object.assign(document.createElement("link"), { rel: "stylesheet", href: GOOGLE_FONTS_HREF });
       link.dataset.shineFonts = "1";

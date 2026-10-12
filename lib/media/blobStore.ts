@@ -83,3 +83,9 @@ export function cachedUrl(url: string): string | undefined {
 export async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   return (await fetch(dataUrl)).blob();
 }
+
+/** Read a stored upload back as a Blob (used to move local uploads to online storage). */
+export function getBlob(url: string): Promise<Blob | undefined> {
+  if (!isIdbUrl(url)) return Promise.resolve(undefined);
+  return tx<Blob | undefined>("readonly", (s) => s.get(idbKey(url)) as IDBRequest<Blob | undefined>);
+}
