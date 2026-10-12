@@ -32,7 +32,7 @@ export function HomeSections() {
   const d = useDb();
   return (
     <>
-      {d.cms.sections.filter((s) => s.enabled).map((s) => {
+         {d.cms.sections.filter((s) => s.enabled && s.type !== "social").map((s) => {
         const C = SECTION_COMPONENTS[s.type];
         if (!C) return null;
         // Promotional banners (Admin › Banners, placement "home") appear after Best Sellers.

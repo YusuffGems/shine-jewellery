@@ -8,6 +8,8 @@ import { StatusBadge } from "@/admin/components/ui";
 import { SocialIcon } from "@/shared/components/Icon";
 import type { SocialLink } from "@/types";
 
+const PLATFORMS = ["Instagram", "Facebook", "TikTok", "YouTube", "X", "WhatsApp", "LinkedIn"];
+
 export default function SocialAdminPage() {
   const d = useDb();
   const { t } = useI18n();
@@ -19,12 +21,12 @@ export default function SocialAdminPage() {
       search={(s) => `${s.platform} ${s.url}`}
       readPerm="cms.read"
       writePerm="cms.update"
-      newItem={() => ({ id: uid("so"), platform: "Instagram", url: "", active: true, sort: d.social.length })}
+      newItem={() => ({ id: uid("so"), platform: "LinkedIn", url: "", active: true, sort: d.social.length })}
       validate={(s) => (s.url && !/^https:\/\//.test(s.url) ? t("admin.social.https") : null)}
       onSave={(s) => upsertEntity("social", s)}
       onDelete={(s) => removeEntity("social", s.id)}
       fields={[
-        { key: "platform", label: t("admin.social.platform"), type: "select", options: ["Instagram", "Facebook", "TikTok", "YouTube", "X", "WhatsApp"].map((p) => ({ value: p, label: p })) },
+        { key: "platform", label: t("admin.social.platform"), type: "select", options: PLATFORMS.map((p) => ({ value: p, label: p })) },
         { key: "url", label: "URL", type: "text", hint: t("admin.social.urlHint") },
         { key: "sort", label: t("admin.f.sort"), type: "number" },
         { key: "active", label: t("admin.f.active"), type: "toggle" },
