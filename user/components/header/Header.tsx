@@ -137,11 +137,8 @@ export function Header() {
           <button onClick={() => setPreviewTheme(undefined)}>{t("theme.exitPreview")}</button>
         </div>
       ) : null}
-         {true ? (
-        <div className="announcement">
-          {tokens.announcementEnabled && L(d.cms.announcement) ? <span>{L(d.cms.announcement)}</span> : null}
-          <SocialLinks className="announcement-social" size={14} />
-        </div>
+      {tokens.announcementEnabled && L(d.cms.announcement) ? (
+        <div className="announcement"><span>{L(d.cms.announcement)}</span></div>
       ) : null}
       <header className={["site-header", isHome && "is-home", scrolled && "is-scrolled", openItem?.columns.length && "mega-open"].filter(Boolean).join(" ")} onMouseEnter={() => setHovering(true)} onMouseLeave={() => (setHovering(false), leave())}>
         <div className="container header-bar">
@@ -158,20 +155,23 @@ export function Header() {
           </div>
           <Brand onDark={overHero || undefined} />
           <div className="header-end">
-            <span className="header-desktop-only row" style={{ gap: 0 }}>
-              <LangSwitch />
-              <AppearanceToggle />
-            </span>
-            <Link href="/showrooms" className="icon-btn header-desktop-only" aria-label={t("nav.showrooms")}><Icon name="pin" /></Link>
-            <Link href="/account" className="icon-btn" aria-label={t("header.account")}><Icon name="user" /></Link>
-            <Link href="/wishlist" className="icon-btn" aria-label={t("header.wishlist")}>
-              <Icon name="heart" />
-              {d.session.wishlist.length ? <span className="count">{d.session.wishlist.length}</span> : null}
-            </Link>
-            <Link href="/cart" className="icon-btn" aria-label={t("header.cart", { count })}>
-              <Icon name="bag" />
-              {count ? <span className="count">{count}</span> : null}
-            </Link>
+            <div className="header-end-icons">
+              <span className="header-desktop-only row" style={{ gap: 0 }}>
+                <LangSwitch />
+                <AppearanceToggle />
+              </span>
+              <Link href="/showrooms" className="icon-btn header-desktop-only" aria-label={t("nav.showrooms")}><Icon name="pin" /></Link>
+              <Link href="/account" className="icon-btn" aria-label={t("header.account")}><Icon name="user" /></Link>
+              <Link href="/wishlist" className="icon-btn" aria-label={t("header.wishlist")}>
+                <Icon name="heart" />
+                {d.session.wishlist.length ? <span className="count">{d.session.wishlist.length}</span> : null}
+              </Link>
+              <Link href="/cart" className="icon-btn" aria-label={t("header.cart", { count })}>
+                <Icon name="bag" />
+                {count ? <span className="count">{count}</span> : null}
+              </Link>
+            </div>
+            <SocialLinks className="header-social" size={15} />
           </div>
         </div>
         <nav className="main-nav" aria-label={t("header.mainNav")}>

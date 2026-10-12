@@ -17,7 +17,7 @@ export function SocialLinks({ className = "", size = 16 }: { className?: string;
   const fromAdmin = d.social.filter((s) => s.active && s.url).sort((a, b) => a.sort - b.sort);
   const links = fromAdmin.length ? fromAdmin : DEFAULT_LINKS;
   return (
-    <div className={`social-links ${className}`}>
+        <div className={`social-icons ${className}`}>
       {links.map((s) => (
         <a key={s.id} className="icon-btn" href={s.url} target="_blank" rel="noopener noreferrer" aria-label={s.platform} title={s.platform}>
           <SocialIcon platform={s.platform} size={size} />
