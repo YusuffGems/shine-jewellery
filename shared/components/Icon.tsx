@@ -96,7 +96,7 @@ export function SocialIcon({ platform, size = 16 }: { platform: string; size?: n
       return <svg {...common}><rect x="2" y="5" width="20" height="14" rx="4" /><path d="m10 9 5 3-5 3V9Z" fill="currentColor" /></svg>;
     case "X":
       return <svg {...common}><path d="M4 4l16 16M20 4 4 20" /></svg>;
-    default:
-      return <Icon name="chat" size={size} />;
+       case "WhatsApp":
+      return <svg {...common}><path d="M4 20l1.3-4A8 8 0 1 1 8 18.7L4 20Z" /><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 .8a4 4 0 0 1-1.8-1.8l.8-1-1-2L9 9.5Z" /></svg>;
   }
 }

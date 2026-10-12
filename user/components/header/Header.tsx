@@ -13,6 +13,7 @@ import { Media } from "@/shared/components/Media";
 import { Brand } from "./Brand";
 import { AppearanceToggle, LangSwitch } from "./Switchers";
 import { SearchOverlay } from "./SearchOverlay";
+import { SocialLinks } from "@/user/components/common/SocialLinks";
 import type { NavItem } from "@/types";
 
 function MegaMenu({ item, onNavigate }: { item: NavItem; onNavigate: () => void }) {
@@ -83,6 +84,7 @@ function MobileNav({ open, onClose, items }: { open: boolean; onClose: () => voi
           </div>
         ))}
       </nav>
+      <SocialLinks className="drawer-social" size={18} />
       <div className="row row--between" style={{ padding: "1rem 1.25rem", borderTop: "1px solid var(--color-border)" }}>
         <LangSwitch />
         <AppearanceToggle />
@@ -135,8 +137,11 @@ export function Header() {
           <button onClick={() => setPreviewTheme(undefined)}>{t("theme.exitPreview")}</button>
         </div>
       ) : null}
-      {tokens.announcementEnabled && L(d.cms.announcement) ? (
-        <div className="announcement"><span>{L(d.cms.announcement)}</span></div>
+         {true ? (
+        <div className="announcement">
+          {tokens.announcementEnabled && L(d.cms.announcement) ? <span>{L(d.cms.announcement)}</span> : null}
+          <SocialLinks className="announcement-social" size={14} />
+        </div>
       ) : null}
       <header className={["site-header", isHome && "is-home", scrolled && "is-scrolled", openItem?.columns.length && "mega-open"].filter(Boolean).join(" ")} onMouseEnter={() => setHovering(true)} onMouseLeave={() => (setHovering(false), leave())}>
         <div className="container header-bar">

@@ -353,3 +353,12 @@
 .promo-stack--compact .promo-title { font-size: var(--fs-h3); }
 .promo-section { padding-block: calc(var(--section-space) * 0.5); }
 @media (max-width: 768px) { .promo { min-height: 300px; } .promo--dark::after, .promo--light::after { background: linear-gradient(0deg, rgba(10,10,10,.75), rgba(10,10,10,.15)); } .promo--light { color: #fff; } }
+
+/* Social icons — top bar + mobile menu */
+.announcement { position: relative; display: flex; justify-content: center; align-items: center; min-height: 2.4rem; }
+.announcement-social { position: absolute; inset-inline-end: 1rem; top: 50%; transform: translateY(-50%); display: flex; gap: 0.1rem; letter-spacing: 0; }
+.announcement-social .icon-btn { width: 28px; height: 28px; color: inherit; }
+.announcement-social .icon-btn:hover { color: var(--color-gold); }
+.drawer-social { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0.75rem 1.25rem; border-top: 1px solid var(--color-border); }
+.drawer-social .icon-btn { border: 1px solid var(--color-border); width: 38px; height: 38px; }
+@media (max-width: 768px) { .announcement-social { display: none; } }

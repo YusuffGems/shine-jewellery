@@ -7,7 +7,7 @@ import { storefrontTokens } from "@/lib/theme/resolve";
 import { subscribeNewsletter } from "@/user/services/engagement";
 import { isEmail } from "@/lib/utils";
 import { useToast } from "@/shared/components/Toast";
-import { SocialIcon } from "@/shared/components/Icon";
+import { SocialLinks } from "@/user/components/common/SocialLinks";
 import { Brand } from "@/user/components/header/Brand";
 
 export function Footer() {
@@ -16,7 +16,6 @@ export function Footer() {
   const toast = useToast();
   const { tokens } = storefrontTokens(d);
   const [email, setEmail] = useState("");
-  const social = d.social.filter((s) => s.active && s.url).sort((a, b) => a.sort - b.sort);
   const shopCats = d.categories.filter((c) => c.active).slice(8, 14);
   const pages = d.cms.pages.filter((p) => p.active);
 
@@ -26,15 +25,7 @@ export function Footer() {
         <div className="footer-brand">
           <Brand background={tokens.footerBackground} />
           <p>{L(d.cms.footerAbout)}</p>
-          {tokens.footerSocial && social.length ? (
-            <div className="footer-social">
-              {social.map((s) => (
-                <a key={s.id} className="icon-btn" href={s.url} target="_blank" rel="noopener noreferrer" aria-label={s.platform}>
-                  <SocialIcon platform={s.platform} />
-                </a>
-              ))}
-            </div>
-          ) : null}
+          <SocialLinks className="footer-social" />
         </div>
         <div>
           <h4>{t("footer.shop")}</h4>
