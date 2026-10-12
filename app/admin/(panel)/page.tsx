@@ -65,7 +65,7 @@ export default function DashboardPage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </div>  
         <div className="a-card">
           <h2>{t("admin.dashboard.orderCount")}</h2>
           <BarChart data={r.orderSeries} />

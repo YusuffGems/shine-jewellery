@@ -47,13 +47,28 @@ export type Selection = Partial<Record<FacetKey, string[]>>;
 
 export interface FacetOption { value: string; count: number }
 
+/* Price range filter: the selection holds one value "range:<min>:<max>" (QAR). */
+export const priceRangeValue = (min: number, max: number) => `range:${Math.floor(min)}:${Math.ceil(max)}`;
+export function parsePriceRange(v?: string): [number, number] | null {
+  if (!v?.startsWith("range:")) return null;
+  const [, a, b] = v.split(":");
+  const min = Number(a), max = Number(b);
+  return Number.isFinite(min) && Number.isFinite(max) ? [min, max] : null;
+}
+
 export function computeFacets(d: Database, products: Product[], prices: Map<string, number>): Record<FacetKey, FacetOption[]> {
   const out = {} as Record<FacetKey, FacetOption[]>;
   for (const key of FACET_ORDER) {
+    if (key === "price") {
+      // Lowest and highest price on this page — used as the ends of the price slider.
+      const all = products.map((p) => prices.get(p.id) ?? 0);
+      out.price = all.length ? [{ value: "min", count: Math.floor(Math.min(...all)) }, { value: "max", count: Math.ceil(Math.max(...all)) }] : [];
+      continue;
+    }
     const counts = new Map<string, number>();
     for (const p of products) for (const v of facetValues(d, p, key, prices.get(p.id) ?? 0)) if (v !== "" && v !== "-1") counts.set(v, (counts.get(v) ?? 0) + 1);
     const opts = Array.from(counts, ([value, count]) => ({ value, count }));
-    if (key === "price" || key === "carat") opts.sort((a, b) => Number(a.value) - Number(b.value));
+    if (key === "carat") opts.sort((a, b) => Number(a.value) - Number(b.value));
     else opts.sort((a, b) => b.count - a.count);
     out[key] = opts;
   }
@@ -63,7 +78,14 @@ export function computeFacets(d: Database, products: Product[], prices: Map<stri
 export function applyFilters(d: Database, products: Product[], sel: Selection, prices: Map<string, number>): Product[] {
   const active = Object.entries(sel).filter(([, v]) => v && v.length) as [FacetKey, string[]][];
   if (!active.length) return products;
-  return products.filter((p) => active.every(([key, values]) => facetValues(d, p, key, prices.get(p.id) ?? 0).some((v) => values.includes(v))));
+  return products.filter((p) =>
+    active.every(([key, values]) => {
+      const price = prices.get(p.id) ?? 0;
+      const range = key === "price" ? parsePriceRange(values[0]) : null;
+      if (range) return price >= range[0] && price <= range[1];
+      return facetValues(d, p, key, price).some((v) => values.includes(v));
+    }),
+  );
 }
 
 export type SortKey = "recommended" | "new" | "best" | "priceAsc" | "priceDesc";
