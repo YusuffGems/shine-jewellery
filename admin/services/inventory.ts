@@ -49,3 +49,24 @@ export function transferStock(productId: string, fromBranch: string, toBranch: s
     writeAudit(d, "transfer", "inventory", productId, fromBranch, { toBranch, qty });
   });
 }
+
+/** Set the available quantity for a product in one showroom to an exact number. */
+export function setAvailable(productId: string, branchId: string, target: number, note: string) {
+  const rec = db.get().inventory.find((r) => r.productId === productId && r.branchId === branchId);
+  const current = rec ? available(rec) : 0;
+  const delta = Math.round(Math.max(0, target)) - current;
+  if (delta !== 0) adjustStock(productId, branchId, delta, note || "Stock count updated");
+}
+
+/** Remove a product's stock line from a showroom. Lines with open reservations can't be removed. */
+export function deleteStockLine(productId: string, branchId: string) {
+  db.update((d) => {
+    const idx = d.inventory.findIndex((r) => r.productId === productId && r.branchId === branchId);
+    if (idx < 0) return;
+    const rec = d.inventory[idx];
+    if (rec.reserved > 0) throw new Error("has_reservations");
+    d.inventoryTx.unshift({ id: uid("itx"), productId, branchId, kind: "adjust", qty: -available(rec), note: "Stock line removed", at: nowIso(), by: actor(d) });
+    writeAudit(d, "delete", "inventory", rec.id, { productId, branchId, available: available(rec) });
+    d.inventory.splice(idx, 1);
+  });
+}

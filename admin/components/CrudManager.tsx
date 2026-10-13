@@ -133,7 +133,7 @@ export interface CrudProps<T extends Row> {
   rowActions?: (item: T) => ReactNode;
 }
 
-export const PAGE_SIZES = [10, 50, 100, 0] as const; // 0 = All
+export const PAGE_SIZES = [10, 20, 50, 100, 0] as const;
 
 /** Paging bar used by admin lists: rows-per-page (10 / 50 / 100 / All) + Prev · 1 2 3 · Next. */
 export function Pager({ total, page, size, onPage, onSize }: { total: number; page: number; size: number; onPage: (n: number) => void; onSize: (n: number) => void }) {

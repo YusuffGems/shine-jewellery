@@ -1,139 +1,353 @@
 "use client";
+/* Inventory — one row per product per showroom.
+   Add stock · Edit (set the exact count) · Move to another showroom · Mark damaged · Delete.
+   Search, filters (showroom, category, metal, stock level), sort and 10/20/50/100/All per page. */
 import { useMemo, useState } from "react";
 import { useDb } from "@/shared/hooks/useDb";
 import { useI18n } from "@/shared/hooks/useI18n";
 import { useAdmin } from "@/admin/hooks/useAdmin";
 import { available, stockStatus } from "@/lib/inventory/stock";
-import { adjustStock, markDamaged, transferStock } from "@/admin/services/inventory";
-import { PageHead, StatusBadge } from "@/admin/components/ui";
+import { adjustStock, deleteStockLine, markDamaged, setAvailable, transferStock } from "@/admin/services/inventory";
+import { PageHead, StatusBadge, EmptyState } from "@/admin/components/ui";
+import { usePaged } from "@/admin/components/CrudManager";
 import { Modal } from "@/shared/components/Overlay";
+import { Media } from "@/shared/components/Media";
+import { Icon } from "@/shared/components/Icon";
 import { useToast } from "@/shared/components/Toast";
+import type { InventoryRecord, Product } from "@/types";
 
-type Action = { kind: "adjust" | "transfer" | "damage"; productId: string; branchId: string };
+type Line = { key: string; p: Product; branchId: string; rec: InventoryRecord; avail: number; lastAt: string | undefined };
+type Dialog =
+  | { kind: "add" }
+  | { kind: "edit" | "transfer" | "damage"; line: Line }
+  | null;
+type SortKey = "name" | "nameDesc" | "high" | "low" | "recent";
+
+const ERR: Record<string, string> = {
+  below_committed: "That is less than what is already sold or reserved.",
+  insufficient_stock: "Not enough pieces available in this showroom.",
+  invalid_transfer: "Choose a different showroom and a quantity above 0.",
+  has_reservations: "This stock has open (unpaid) orders reserved on it — cancel those orders first.",
+};
 
 export default function InventoryPage() {
   const d = useDb();
   const { t, L, date } = useI18n();
   const { user, can } = useAdmin();
   const toast = useToast();
+  const editable = can("inventory.update");
   const [tab, setTab] = useState<"stock" | "reservations" | "transactions">("stock");
+
+  // Filters
   const [q, setQ] = useState("");
-  const [onlyLow, setOnlyLow] = useState(false);
-  const [action, setAction] = useState<Action | null>(null);
-  const [form, setForm] = useState({ qty: 1, note: "", to: "" });
+  const [fBranch, setFBranch] = useState("all");
+  const [fCat, setFCat] = useState("all");
+  const [fMetal, setFMetal] = useState("all");
+  const [fLevel, setFLevel] = useState<"all" | "in" | "low" | "out">("all");
+  const [sort, setSort] = useState<SortKey>("name");
+
+  // Dialogs
+  const [dialog, setDialog] = useState<Dialog>(null);
+  const [form, setForm] = useState({ productId: "", branchId: "", qty: 1, note: "", to: "" });
+  const [err, setErr] = useState("");
+
   // Branch managers see only their branch.
   const branches = d.branches.filter((b) => !user?.branchId || b.id === user.branchId);
-  const editable = can("inventory.update");
+  const branchIds = new Set(branches.map((b) => b.id));
+  const low = d.settings.lowStockThreshold;
 
-  const rows = useMemo(
+  const lastMove = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const x of d.inventoryTx) {
+      const k = `${x.productId}|${x.branchId}`;
+      if (!m.has(k)) m.set(k, x.at); // newest first
+    }
+    return m;
+  }, [d.inventoryTx]);
+
+  const allLines = useMemo<Line[]>(
     () =>
-      d.products
-        .filter((p) => !q || `${p.name.en} ${p.sku}`.toLowerCase().includes(q.toLowerCase()))
-        .map((p) => {
-          const recs = branches.map((b) => d.inventory.find((r) => r.productId === p.id && r.branchId === b.id));
-          const totalAvail = recs.reduce((s, r) => s + (r ? available(r) : 0), 0);
-          return { p, recs, totalAvail };
+      d.inventory
+        .filter((r) => branchIds.has(r.branchId))
+        .map((rec) => {
+          const p = d.products.find((x) => x.id === rec.productId);
+          return p ? ({ key: `${p.id}|${rec.branchId}`, p, branchId: rec.branchId, rec, avail: available(rec), lastAt: lastMove.get(`${p.id}|${rec.branchId}`) } as Line) : null;
         })
-        .filter((r) => !onlyLow || r.totalAvail <= d.settings.lowStockThreshold),
-    [d, q, onlyLow, branches],
+        .filter((x): x is Line => !!x),
+    [d.inventory, d.products, lastMove, branches], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  const run = () => {
-    if (!action) return;
+  const lines = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    const list = allLines.filter(({ p, branchId, avail }) => {
+      if (term && !`${p.name.en} ${p.name.ar} ${p.sku}`.toLowerCase().includes(term)) return false;
+      if (fBranch !== "all" && branchId !== fBranch) return false;
+      if (fCat !== "all" && !p.categoryIds.includes(fCat)) return false;
+      if (fMetal !== "all" && p.rateId !== fMetal) return false;
+      if (fLevel === "out" && avail > 0) return false;
+      if (fLevel === "low" && (avail === 0 || avail > low)) return false;
+      if (fLevel === "in" && avail <= low) return false;
+      return true;
+    });
+    const byName = (a: Line, b: Line) => a.p.name.en.localeCompare(b.p.name.en) || a.branchId.localeCompare(b.branchId);
+    list.sort((a, b) => {
+      switch (sort) {
+        case "nameDesc": return -byName(a, b);
+        case "high": return b.avail - a.avail || byName(a, b);
+        case "low": return a.avail - b.avail || byName(a, b);
+        case "recent": return Date.parse(b.lastAt ?? "0") - Date.parse(a.lastAt ?? "0") || byName(a, b);
+        default: return byName(a, b);
+      }
+    });
+    return list;
+  }, [allLines, q, fBranch, fCat, fMetal, fLevel, sort, low]);
+
+  const paged = usePaged(lines, `${q}|${fBranch}|${fCat}|${fMetal}|${fLevel}|${sort}`);
+  const pendingRes = d.orders.filter((o) => o.payment.status === "pending").flatMap((o) => o.items.map((it) => ({ o, it })));
+  const resPaged = usePaged(pendingRes, pendingRes.length);
+  const txPaged = usePaged(d.inventoryTx, d.inventoryTx.length);
+
+  // Summary
+  const totalPieces = allLines.reduce((s, l) => s + l.avail, 0);
+  const productTotals = new Map<string, number>();
+  allLines.forEach((l) => productTotals.set(l.p.id, (productTotals.get(l.p.id) ?? 0) + l.avail));
+  const lowCount = [...productTotals.values()].filter((n) => n > 0 && n <= low).length;
+  const outCount = d.products.filter((p) => (productTotals.get(p.id) ?? 0) === 0).length;
+
+  const branchName = (id: string) => L(d.branches.find((b) => b.id === id)?.name) || id;
+  const clearFilters = () => (setQ(""), setFBranch("all"), setFCat("all"), setFMetal("all"), setFLevel("all"));
+
+  const open = (dlg: Exclude<Dialog, null>) => {
+    setErr("");
+    if (dlg.kind === "add") setForm({ productId: "", branchId: fBranch !== "all" ? fBranch : branches[0]?.id ?? "", qty: 1, note: "", to: "" });
+    else setForm({ productId: dlg.line.p.id, branchId: dlg.line.branchId, qty: dlg.kind === "edit" ? dlg.line.avail : 1, note: "", to: branches.find((b) => b.id !== dlg.line.branchId)?.id ?? "" });
+    setDialog(dlg);
+  };
+
+  const save = () => {
+    if (!dialog) return;
     try {
-      if (action.kind === "adjust") adjustStock(action.productId, action.branchId, form.qty, form.note || "Manual adjustment");
-      if (action.kind === "damage") markDamaged(action.productId, action.branchId, form.qty, form.note || "Damaged");
-      if (action.kind === "transfer") transferStock(action.productId, action.branchId, form.to, form.qty);
+      if (dialog.kind === "add") {
+        if (!form.productId) return setErr("Choose a product");
+        if (!form.branchId) return setErr("Choose a showroom");
+        if (form.qty <= 0) return setErr("Enter how many pieces to add");
+        adjustStock(form.productId, form.branchId, Math.round(form.qty), form.note || "Stock added");
+      }
+      if (dialog.kind === "edit") setAvailable(form.productId, form.branchId, form.qty, form.note);
+      if (dialog.kind === "damage") markDamaged(form.productId, form.branchId, Math.round(form.qty), form.note || "Damaged");
+      if (dialog.kind === "transfer") transferStock(form.productId, form.branchId, form.to, Math.round(form.qty));
       toast(t("common.saved"));
-      setAction(null);
+      setDialog(null);
     } catch (e) {
-      toast(t(`admin.inventory.error.${(e as Error).message}`, undefined, (e as Error).message), "error");
+      setErr(ERR[(e as Error).message] ?? (e as Error).message);
     }
   };
 
+  const remove = (l: Line) => {
+    if (!window.confirm(`Remove ${l.p.name.en} from ${branchName(l.branchId)}? Its ${l.avail} available piece(s) will be cleared.`)) return;
+    try {
+      deleteStockLine(l.p.id, l.branchId);
+      toast(t("common.deleted"));
+    } catch (e) {
+      toast(ERR[(e as Error).message] ?? (e as Error).message, "error");
+    }
+  };
+
+  const dialogLine = dialog && dialog.kind !== "add" ? dialog.line : null;
+  const titles = { add: "Add stock", edit: "Edit stock", transfer: "Move to another showroom", damage: "Mark as damaged" } as const;
+
   return (
     <>
-      <PageHead title={t("admin.nav.inventory")} sub={t("admin.inventory.sub")} />
-      <div className="tabs" role="tablist" style={{ marginBottom: "1rem" }}>
+      <PageHead
+        title={t("admin.nav.inventory")}
+        sub="Stock per showroom. Add, edit, move or remove stock — the website updates instantly."
+        actions={editable && tab === "stock" ? <button className="btn" onClick={() => open({ kind: "add" })}><Icon name="plus" size={16} /> Add stock</button> : null}
+      />
+
+      <div className="inv-stats">
+        <div className="a-card"><span className="muted small">Pieces in stock</span><b>{totalPieces.toLocaleString("en")}</b></div>
+        <div className="a-card"><span className="muted small">Stock lines</span><b>{allLines.length}</b></div>
+        <button className="a-card" onClick={() => (setTab("stock"), setFLevel("low"))}><span className="muted small">Low stock products</span><b className="inv-warn">{lowCount}</b></button>
+        <button className="a-card" onClick={() => (setTab("stock"), setFLevel("out"))}><span className="muted small">Out of stock products</span><b className="inv-bad">{outCount}</b></button>
+      </div>
+
+      <div className="tabs" role="tablist" style={{ margin: "1rem 0" }}>
         {(["stock", "reservations", "transactions"] as const).map((x) => <button key={x} role="tab" className="tab" aria-selected={tab === x} onClick={() => setTab(x)}>{t(`admin.inventory.tab.${x}`)}</button>)}
       </div>
 
       {tab === "stock" ? (
         <>
-          <div className="a-toolbar">
-            <input className="input" type="search" placeholder={t("admin.search")} value={q} onChange={(e) => setQ(e.target.value)} />
-            <label className="check"><input type="checkbox" checked={onlyLow} onChange={(e) => setOnlyLow(e.target.checked)} /> {t("admin.inventory.onlyLow")}</label>
+          <div className="a-toolbar inv-toolbar">
+            <input className="input" type="search" placeholder="Search product or SKU…" value={q} onChange={(e) => setQ(e.target.value)} aria-label={t("admin.search")} />
+            <select className="select" value={fBranch} onChange={(e) => setFBranch(e.target.value)} aria-label="Showroom">
+              <option value="all">All showrooms</option>
+              {branches.map((b) => <option key={b.id} value={b.id}>{L(b.name)}</option>)}
+            </select>
+            <select className="select" value={fCat} onChange={(e) => setFCat(e.target.value)} aria-label="Category">
+              <option value="all">All categories</option>
+              {d.categories.map((c) => <option key={c.id} value={c.id}>{L(c.name)}</option>)}
+            </select>
+            <select className="select" value={fMetal} onChange={(e) => setFMetal(e.target.value)} aria-label="Metal">
+              <option value="all">All metals</option>
+              {d.rates.map((r) => <option key={r.id} value={r.id}>{L(r.label)}</option>)}
+            </select>
+            <select className="select" value={fLevel} onChange={(e) => setFLevel(e.target.value as typeof fLevel)} aria-label="Stock level">
+              <option value="all">All stock levels</option>
+              <option value="in">In stock</option>
+              <option value="low">Low stock (1–{low})</option>
+              <option value="out">Out of stock (0)</option>
+            </select>
+            <select className="select" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort">
+              <option value="name">Name A–Z</option>
+              <option value="nameDesc">Name Z–A</option>
+              <option value="high">Most stock first</option>
+              <option value="low">Least stock first</option>
+              <option value="recent">Recently updated</option>
+            </select>
+            <button className="btn btn--ghost btn--sm" onClick={clearFilters}>Clear</button>
+            <span className="muted small" style={{ marginInlineStart: "auto" }}>{lines.length} results</span>
           </div>
+
           <div className="table-wrap">
-            <table className="table">
-              <thead><tr><th>{t("admin.f.product")}</th>{branches.map((b) => <th key={b.id} className="num">{L(b.name)}</th>)}<th className="num">{t("admin.inventory.available")}</th><th>{t("admin.f.status")}</th></tr></thead>
+            <table className="table inv-table">
+              <thead>
+                <tr>
+                  <th className="num" style={{ width: 56 }}>S.No</th>
+                  <th>{t("admin.f.product")}</th>
+                  <th>Showroom</th>
+                  <th className="num">Available</th>
+                  <th className="num">Reserved</th>
+                  <th className="num">Sold</th>
+                  <th className="num">Damaged</th>
+                  <th>{t("admin.f.status")}</th>
+                  <th>Last updated</th>
+                  <th className="num">{t("admin.actions")}</th>
+                </tr>
+              </thead>
               <tbody>
-                {rows.map(({ p, recs, totalAvail }) => (
-                  <tr key={p.id}>
-                    <td><b style={{ fontWeight: 500 }}>{L(p.name)}</b><br /><small className="muted ltr">{p.sku}</small></td>
-                    {branches.map((b, i) => {
-                      const r = recs[i];
-                      return (
-                        <td key={b.id} className="num">
-                          <span title={r ? `${t("admin.inventory.total")} ${r.total} · ${t("admin.inventory.reserved")} ${r.reserved} · ${t("admin.inventory.sold")} ${r.sold} · ${t("admin.inventory.damaged")} ${r.damaged} · ${t("admin.inventory.returned")} ${r.returned} · ${t("admin.inventory.transferred")} ${r.transferred}` : ""}>
-                            {r ? available(r) : 0}
-                            {r?.reserved ? <small className="muted"> ({r.reserved}R)</small> : null}
-                          </span>
-                          {editable ? (
-                            <span className="row" style={{ justifyContent: "flex-end", gap: 2, marginTop: 4 }}>
-                              <button className="btn btn--secondary btn--sm" style={{ minHeight: 24, padding: "0 6px" }} onClick={() => (setAction({ kind: "adjust", productId: p.id, branchId: b.id }), setForm({ qty: 1, note: "", to: "" }))}>±</button>
-                              <button className="btn btn--secondary btn--sm" style={{ minHeight: 24, padding: "0 6px" }} onClick={() => (setAction({ kind: "transfer", productId: p.id, branchId: b.id }), setForm({ qty: 1, note: "", to: d.branches.find((x) => x.id !== b.id)?.id ?? "" }))} title={t("admin.inventory.transfer")}>⇄</button>
-                              <button className="btn btn--secondary btn--sm" style={{ minHeight: 24, padding: "0 6px" }} onClick={() => (setAction({ kind: "damage", productId: p.id, branchId: b.id }), setForm({ qty: 1, note: "", to: "" }))} title={t("admin.inventory.damage")}>✕</button>
-                            </span>
-                          ) : null}
-                        </td>
-                      );
-                    })}
-                    <td className="num"><b>{totalAvail}</b></td>
-                    <td><StatusBadge value={stockStatus(totalAvail, d.settings.lowStockThreshold)} label={t(`admin.inventory.level.${stockStatus(totalAvail, d.settings.lowStockThreshold)}`)} /></td>
-                  </tr>
-                ))}
+                {paged.pageRows.map((l, i) => {
+                  const level = stockStatus(l.avail, low);
+                  return (
+                    <tr key={l.key}>
+                      <td className="num muted">{paged.start + i + 1}</td>
+                      <td>
+                        <span className="cell-main">
+                          <span className="thumb"><Media mediaId={l.p.imageIds[0]} kind="product" /></span>
+                          <span><b>{L(l.p.name)}</b><small className="ltr">{l.p.sku} · {L(d.rates.find((r) => r.id === l.p.rateId)?.label)}</small></span>
+                        </span>
+                      </td>
+                      <td className="small">{branchName(l.branchId)}</td>
+                      <td className="num"><b className="inv-qty">{l.avail}</b></td>
+                      <td className="num muted">{l.rec.reserved}</td>
+                      <td className="num muted">{l.rec.sold}</td>
+                      <td className="num muted">{l.rec.damaged}</td>
+                      <td><StatusBadge value={level} label={t(`admin.inventory.level.${level}`)} /></td>
+                      <td className="small muted" style={{ whiteSpace: "nowrap" }}>{l.lastAt ? date(l.lastAt, true) : "—"}</td>
+                      <td>
+                        {editable ? (
+                          <div className="row-actions">
+                            <button className="btn btn--secondary btn--sm" onClick={() => open({ kind: "edit", line: l })}>{t("common.edit")}</button>
+                            <button className="btn btn--secondary btn--sm" title="Move to another showroom" onClick={() => open({ kind: "transfer", line: l })}>Move</button>
+                            <button className="btn btn--secondary btn--sm" title="Mark damaged" onClick={() => open({ kind: "damage", line: l })}>Damaged</button>
+                            <button className="btn btn--danger btn--sm" aria-label={t("common.delete")} onClick={() => remove(l)}><Icon name="trash" size={14} /></button>
+                          </div>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
+            {!lines.length ? <EmptyState text={allLines.length ? "No stock matches these filters." : "No stock yet — click “Add stock”."} /> : null}
           </div>
+          {paged.pager}
         </>
       ) : null}
 
       {tab === "reservations" ? (
-        <div className="table-wrap">
-          <table className="table">
-            <thead><tr><th>{t("order.col.number")}</th><th>{t("admin.f.product")}</th><th>{t("admin.nav.showrooms")}</th><th className="num">{t("admin.inventory.qty")}</th><th>{t("order.col.date")}</th></tr></thead>
-            <tbody>
-              {d.orders.filter((o) => o.payment.status === "pending").flatMap((o) => o.items.map((it, i) => (
-                <tr key={o.id + i}><td className="ltr">{o.number}</td><td>{L(it.name)}</td><td>{L(d.branches.find((b) => b.id === it.branchId)?.name)}</td><td className="num">{it.qty}</td><td>{date(o.createdAt, true)}</td></tr>
-              )))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <p className="field-hint" style={{ marginBottom: "0.75rem" }}>Pieces held for orders that are waiting for payment.</p>
+          <div className="table-wrap">
+            <table className="table">
+              <thead><tr><th className="num" style={{ width: 56 }}>S.No</th><th>{t("order.col.number")}</th><th>{t("admin.f.product")}</th><th>{t("admin.nav.showrooms")}</th><th className="num">{t("admin.inventory.qty")}</th><th>{t("order.col.date")}</th></tr></thead>
+              <tbody>
+                {resPaged.pageRows.map(({ o, it }, i) => (
+                  <tr key={o.id + i}><td className="num muted">{resPaged.start + i + 1}</td><td className="ltr">{o.number}</td><td>{L(it.name)}</td><td>{branchName(it.branchId)}</td><td className="num">{it.qty}</td><td>{date(o.createdAt, true)}</td></tr>
+                ))}
+              </tbody>
+            </table>
+            {!pendingRes.length ? <EmptyState text="No reserved stock." /> : null}
+          </div>
+          {resPaged.pager}
+        </>
       ) : null}
 
       {tab === "transactions" ? (
-        <div className="table-wrap">
-          <table className="table">
-            <thead><tr><th>{t("order.col.date")}</th><th>{t("admin.f.product")}</th><th>{t("admin.nav.showrooms")}</th><th>{t("admin.inventory.kind")}</th><th className="num">{t("admin.inventory.qty")}</th><th>{t("admin.inventory.note")}</th><th>{t("admin.audit.user")}</th></tr></thead>
-            <tbody>
-              {d.inventoryTx.slice(0, 200).map((x) => (
-                <tr key={x.id}><td>{date(x.at, true)}</td><td>{L(d.products.find((p) => p.id === x.productId)?.name)}</td><td>{L(d.branches.find((b) => b.id === x.branchId)?.name)}</td><td><span className="badge">{x.kind}</span></td><td className="num">{x.qty}</td><td>{x.note}</td><td className="muted">{x.by}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="table-wrap">
+            <table className="table">
+              <thead><tr><th className="num" style={{ width: 56 }}>S.No</th><th>{t("order.col.date")}</th><th>{t("admin.f.product")}</th><th>{t("admin.nav.showrooms")}</th><th>{t("admin.inventory.kind")}</th><th className="num">{t("admin.inventory.qty")}</th><th>{t("admin.inventory.note")}</th><th>{t("admin.audit.user")}</th></tr></thead>
+              <tbody>
+                {txPaged.pageRows.map((x, i) => (
+                  <tr key={x.id}><td className="num muted">{txPaged.start + i + 1}</td><td>{date(x.at, true)}</td><td>{L(d.products.find((p) => p.id === x.productId)?.name)}</td><td>{branchName(x.branchId)}</td><td><span className="badge">{x.kind}</span></td><td className="num">{x.qty}</td><td>{x.note}</td><td className="muted">{x.by}</td></tr>
+                ))}
+              </tbody>
+            </table>
+            {!d.inventoryTx.length ? <EmptyState text="No stock movements yet." /> : null}
+          </div>
+          {txPaged.pager}
+        </>
       ) : null}
 
-      <Modal open={!!action} onClose={() => setAction(null)} title={action ? t(`admin.inventory.${action.kind}`) : ""} closeLabel={t("common.close")} footer={<><button className="btn btn--secondary" onClick={() => setAction(null)}>{t("common.cancel")}</button><button className="btn" onClick={run}>{t("common.save")}</button></>}>
-        {action ? (
+      <Modal
+        open={!!dialog}
+        onClose={() => setDialog(null)}
+        title={dialog ? titles[dialog.kind] : ""}
+        closeLabel={t("common.close")}
+        footer={<>
+          {err ? <span className="field-error" style={{ marginInlineEnd: "auto" }}>{err}</span> : null}
+          <button className="btn btn--secondary" onClick={() => setDialog(null)}>{t("common.cancel")}</button>
+          <button className="btn" onClick={save}>{t("common.save")}</button>
+        </>}
+      >
+        {dialog ? (
           <div className="a-form">
-            <p className="span-2 muted">{L(d.products.find((p) => p.id === action.productId)?.name)} · {L(d.branches.find((b) => b.id === action.branchId)?.name)}</p>
-            <label className="field"><span className="label">{action.kind === "adjust" ? t("admin.inventory.delta") : t("admin.inventory.qty")}</span><input className="input" type="number" value={form.qty} onChange={(e) => setForm({ ...form, qty: Number(e.target.value) })} /></label>
-            {action.kind === "transfer" ? (
-              <label className="field"><span className="label">{t("admin.inventory.to")}</span><select className="select" value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })}>{d.branches.filter((b) => b.id !== action.branchId).map((b) => <option key={b.id} value={b.id}>{L(b.name)}</option>)}</select></label>
+            {dialog.kind === "add" ? (
+              <>
+                <label className="field span-2"><span className="label">{t("admin.f.product")}</span>
+                  <select className="select" value={form.productId} onChange={(e) => setForm({ ...form, productId: e.target.value })}>
+                    <option value="">— Choose a product —</option>
+                    {[...d.products].sort((a, b) => a.name.en.localeCompare(b.name.en)).map((p) => <option key={p.id} value={p.id}>{L(p.name)} · {p.sku}</option>)}
+                  </select>
+                </label>
+                <label className="field"><span className="label">Showroom</span>
+                  <select className="select" value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value })}>
+                    {branches.map((b) => <option key={b.id} value={b.id}>{L(b.name)}</option>)}
+                  </select>
+                </label>
+                <label className="field"><span className="label">Pieces to add</span><input className="input" type="number" min={1} value={form.qty} onChange={(e) => setForm({ ...form, qty: Number(e.target.value) })} /></label>
+                {form.productId && form.branchId ? (
+                  <p className="span-2 muted small">Currently in this showroom: <b>{(() => { const r = d.inventory.find((x) => x.productId === form.productId && x.branchId === form.branchId); return r ? available(r) : 0; })()}</b> piece(s)</p>
+                ) : null}
+              </>
             ) : (
-              <label className="field"><span className="label">{t("admin.inventory.note")}</span><input className="input" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></label>
+              <p className="span-2 muted">{dialogLine ? `${L(dialogLine.p.name)} · ${branchName(dialogLine.branchId)} · ${dialogLine.avail} available now` : ""}</p>
+            )}
+
+            {dialog.kind === "edit" ? (
+              <label className="field"><span className="label">Available pieces (exact count)</span><input className="input" type="number" min={0} value={form.qty} onChange={(e) => setForm({ ...form, qty: Number(e.target.value) })} /></label>
+            ) : null}
+            {dialog.kind === "transfer" || dialog.kind === "damage" ? (
+              <label className="field"><span className="label">{t("admin.inventory.qty")}</span><input className="input" type="number" min={1} value={form.qty} onChange={(e) => setForm({ ...form, qty: Number(e.target.value) })} /></label>
+            ) : null}
+            {dialog.kind === "transfer" ? (
+              <label className="field"><span className="label">Move to</span>
+                <select className="select" value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })}>
+                  {d.branches.filter((b) => b.id !== form.branchId).map((b) => <option key={b.id} value={b.id}>{L(b.name)}</option>)}
+                </select>
+              </label>
+            ) : (
+              <label className="field span-2"><span className="label">{t("admin.inventory.note")}</span><input className="input" placeholder="Optional — e.g. New stock arrived" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></label>
             )}
           </div>
         ) : null}
