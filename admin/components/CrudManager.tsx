@@ -133,7 +133,54 @@ export interface CrudProps<T extends Row> {
   rowActions?: (item: T) => ReactNode;
 }
 
-const PAGE_SIZE = 10;
+export const PAGE_SIZES = [10, 50, 100, 0] as const; // 0 = All
+
+/** Paging bar used by admin lists: rows-per-page (10 / 50 / 100 / All) + Prev · 1 2 3 · Next. */
+export function Pager({ total, page, size, onPage, onSize }: { total: number; page: number; size: number; onPage: (n: number) => void; onSize: (n: number) => void }) {
+  if (!total) return null;
+  const per = size || total;
+  const pages = Math.max(1, Math.ceil(total / per));
+  const start = (page - 1) * per;
+  return (
+    <nav className="a-pager" aria-label="Pages">
+      <div className="row" style={{ gap: "0.6rem" }}>
+        <span className="muted small">Showing {start + 1}–{Math.min(start + per, total)} of {total}</span>
+        <label className="row small muted" style={{ gap: "0.4rem" }}>
+          Rows
+          <select className="select a-pager-size" value={size} onChange={(e) => onSize(Number(e.target.value))}>
+            {PAGE_SIZES.map((n) => <option key={n} value={n}>{n === 0 ? "All" : n}</option>)}
+          </select>
+        </label>
+      </div>
+      {pages > 1 ? (
+        <div className="a-pager-buttons">
+          <button className="btn btn--secondary btn--sm" disabled={page === 1} onClick={() => onPage(page - 1)}>‹ Prev</button>
+          {Array.from({ length: pages }, (_, i) => i + 1)
+            .filter((n) => n === 1 || n === pages || Math.abs(n - page) <= 1)
+            .map((n, i, arr) => (
+              <span key={n} className="row" style={{ gap: 4 }}>
+                {i > 0 && n - arr[i - 1] > 1 ? <span className="muted">…</span> : null}
+                <button className={`btn btn--sm ${n === page ? "" : "btn--secondary"}`} aria-current={n === page ? "page" : undefined} onClick={() => onPage(n)}>{n}</button>
+              </span>
+            ))}
+          <button className="btn btn--secondary btn--sm" disabled={page === pages} onClick={() => onPage(page + 1)}>Next ›</button>
+        </div>
+      ) : null}
+    </nav>
+  );
+}
+
+/** Page-state helper for any list: returns the rows for the current page. */
+export function usePaged<T>(rows: T[], resetKey: unknown) {
+  const [page, setPage] = useState(1);
+  const [size, setSize] = useState(10);
+  const per = size || rows.length || 1;
+  const pages = Math.max(1, Math.ceil(rows.length / per));
+  useEffect(() => setPage(1), [resetKey, size]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (page > pages) setPage(pages); }, [page, pages]);
+  const start = (page - 1) * per;
+  return { pageRows: rows.slice(start, start + per), start, pager: <Pager total={rows.length} page={page} size={size} onPage={setPage} onSize={setSize} /> };
+}
 
 export function CrudManager<T extends Row>(p: CrudProps<T>) {
   const { t } = useI18n();
@@ -145,7 +192,6 @@ export function CrudManager<T extends Row>(p: CrudProps<T>) {
   const [error, setError] = useState("");
   const writable = can(p.writePerm);
   const [sort, setSort] = useState<"default" | "new" | "old">("default");
-  const [page, setPage] = useState(1);
   const rows = useMemo(() => {
     const list = p.items
       .map((item, index) => ({ item, index }))
@@ -157,11 +203,7 @@ export function CrudManager<T extends Row>(p: CrudProps<T>) {
     }
     return list.map((x) => x.item);
   }, [p, q, sort]);
-  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  useEffect(() => setPage(1), [q, sort, p.items.length]);
-  useEffect(() => { if (page > pages) setPage(pages); }, [page, pages]);
-  const start = (page - 1) * PAGE_SIZE;
-  const pageRows = rows.slice(start, start + PAGE_SIZE);
+  const { pageRows, start, pager } = usePaged(rows, `${q}|${sort}|${p.items.length}`);
 
   if (!can(p.readPerm)) return <EmptyState text={t("admin.noAccess")} />;
 
@@ -230,23 +272,7 @@ export function CrudManager<T extends Row>(p: CrudProps<T>) {
         </table>
         {!rows.length ? <EmptyState text={t("admin.noResults")} /> : null}
       </div>
-      {rows.length > PAGE_SIZE ? (
-        <nav className="a-pager" aria-label="Pages">
-          <span className="muted small">Showing {start + 1}–{Math.min(start + PAGE_SIZE, rows.length)} of {rows.length}</span>
-          <div className="a-pager-buttons">
-            <button className="btn btn--secondary btn--sm" disabled={page === 1} onClick={() => setPage(page - 1)}>‹ Prev</button>
-            {Array.from({ length: pages }, (_, i) => i + 1)
-              .filter((n) => n === 1 || n === pages || Math.abs(n - page) <= 1)
-              .map((n, i, arr) => (
-                <span key={n} className="row" style={{ gap: 4 }}>
-                  {i > 0 && n - arr[i - 1] > 1 ? <span className="muted">…</span> : null}
-                  <button className={`btn btn--sm ${n === page ? "" : "btn--secondary"}`} aria-current={n === page ? "page" : undefined} onClick={() => setPage(n)}>{n}</button>
-                </span>
-              ))}
-            <button className="btn btn--secondary btn--sm" disabled={page === pages} onClick={() => setPage(page + 1)}>Next ›</button>
-          </div>
-        </nav>
-      ) : null}
+      {pager}
 
       <Modal
         open={!!draft}

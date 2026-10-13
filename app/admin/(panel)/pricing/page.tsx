@@ -8,7 +8,7 @@ import { saveSettings } from "@/admin/services/content";
 import { PageHead } from "@/admin/components/ui";
 import { PriceBreakdown } from "@/shared/components/PriceBreakdown";
 import { useToast } from "@/shared/components/Toast";
-import { CrudManager } from "@/admin/components/CrudManager";
+import { CrudManager, usePaged } from "@/admin/components/CrudManager";
 import { deleteProduct, newProduct, saveProduct } from "@/admin/services/products";
 import { slugify } from "@/lib/utils";
 import type { Product } from "@/types";
@@ -23,12 +23,19 @@ export default function PricingPage() {
   const [selected, setSelected] = useState(d.products[0]?.id ?? "");
   const rows = useMemo(() => d.products.map((p) => ({ p, b: calculatePrice(p, d.rates.find((r) => r.id === p.rateId), d.settings.taxRate) })), [d]);
   const sel = rows.find((r) => r.p.id === selected);
-  const snapshots = d.orders.flatMap((o) => o.items.map((it) => ({ o, it }))).slice(0, 15);
+  const snapshots = d.orders.flatMap((o) => o.items.map((it) => ({ o, it })));
+  const snapPaged = usePaged(snapshots, snapshots.length);
   const [fRate, setFRate] = useState("all");
   const [fCat, setFCat] = useState("all");
   const [fStatus, setFStatus] = useState("all");
   const [fPrice, setFPrice] = useState("all");
   const priceOfP = (p: Product) => calculatePrice(p, d.rates.find((r) => r.id === p.rateId), d.settings.taxRate);
+  /** When this product's price last changed: product edited, or its metal rate updated — whichever is later. */
+  const priceUpdated = (p: Product): { at: string; why: string } => {
+    const prod = p.updatedAt ?? p.createdAt;
+    const rate = d.rates.find((r) => r.id === p.rateId)?.updatedAt;
+    return rate && Date.parse(rate) > Date.parse(prod) ? { at: rate, why: "Metal rate" } : { at: prod, why: p.updatedAt ? "Product edit" : "Added" };
+  };
   const PRICE_BANDS: Record<string, [number, number]> = { "0-1000": [0, 1000], "1000-3000": [1000, 3000], "3000-7500": [3000, 7500], "7500-15000": [7500, 15000], "15000+": [15000, Infinity] };
 
   return (
@@ -142,6 +149,7 @@ export default function PricingPage() {
             { label: t("price.premium"), num: true, render: (p) => { const b = priceOfP(p); return money(b.premium + b.otherCharges); } },
             { label: t("price.tax", { rate: d.settings.taxRate }), num: true, render: (p) => money(priceOfP(p).tax) },
             { label: t("price.total"), num: true, render: (p) => <b>{money(priceOfP(p).total)}</b> },
+            { label: "Price updated", render: (p) => { const u = priceUpdated(p); return <span className="small" style={{ whiteSpace: "nowrap" }}>{date(u.at, true)}<br /><small className="muted">{u.why}</small></span>; } },
           ]}
         />
       </div>
@@ -149,13 +157,14 @@ export default function PricingPage() {
         <h2>{t("admin.pricing.snapshots")}</h2>
         <p className="field-hint" style={{ marginBottom: "0.75rem" }}>{t("admin.pricing.snapshotsHint")}</p>
         <table className="table">
-          <thead><tr><th>{t("order.col.number")}</th><th>{t("admin.f.product")}</th><th className="num">{t("admin.pricing.rateAtOrder")}</th><th className="num">{t("admin.pricing.rateNow")}</th><th className="num">{t("admin.pricing.priceAtOrder")}</th><th>{t("order.col.date")}</th></tr></thead>
+          <thead><tr><th className="num" style={{ width: 56 }}>S.No</th><th>{t("order.col.number")}</th><th>{t("admin.f.product")}</th><th className="num">{t("admin.pricing.rateAtOrder")}</th><th className="num">{t("admin.pricing.rateNow")}</th><th className="num">{t("admin.pricing.priceAtOrder")}</th><th>{t("order.col.date")}</th></tr></thead>
           <tbody>
-            {snapshots.map(({ o, it }, i) => (
-              <tr key={o.id + i}><td className="ltr">{o.number}</td><td>{L(it.name)}</td><td className="num">{money(it.rateSnapshot.ratePerGram)}</td><td className="num">{money(d.rates.find((r) => r.id === it.rateSnapshot.rateId)?.ratePerGram ?? 0)}</td><td className="num">{money(it.unitPrice)}</td><td>{date(o.createdAt)}</td></tr>
+            {snapPaged.pageRows.map(({ o, it }, i) => (
+              <tr key={o.id + i}><td className="num muted">{snapPaged.start + i + 1}</td><td className="ltr">{o.number}</td><td>{L(it.name)}</td><td className="num">{money(it.rateSnapshot.ratePerGram)}</td><td className="num">{money(d.rates.find((r) => r.id === it.rateSnapshot.rateId)?.ratePerGram ?? 0)}</td><td className="num">{money(it.unitPrice)}</td><td>{date(o.createdAt)}</td></tr>
             ))}
           </tbody>
         </table>
+        {snapPaged.pager}
       </div>
     </>
   );

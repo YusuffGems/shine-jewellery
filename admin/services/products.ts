@@ -4,8 +4,9 @@ import type { Database, Product } from "@/types";
 import { nowIso, uid } from "@/lib/utils";
 import { removeEntity, upsertEntity } from "@/shared/services/core";
 
+
 /* ── Mutations ─────────────────────────────────────────────── */
-export const saveProduct = (p: Product) => upsertEntity("products", p);
+export const saveProduct = (p: Product) => upsertEntity("products", { ...p, updatedAt: nowIso() });
 
 export function deleteProduct(id: string) {
   removeEntity("products", id);

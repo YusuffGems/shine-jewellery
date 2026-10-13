@@ -1,4 +1,4 @@
-  /* ──────────────────────────────────────────────────────────────
+/* ──────────────────────────────────────────────────────────────
     SHINE Gold & Diamonds — domain types
     Mirrors prisma/schema.prisma so the mock layer and the future
     API return the same shapes.
@@ -15,36 +15,36 @@
 
   export type PlaceholderKind = "product" | "collection" | "campaign" | "video" | "showroom" | "category";
 
-  export interface MediaAsset {
-    id: string;
-    type: MediaType;
-    title: string;
-    alt: Localized;
-    caption?: string;
-    description?: string;
-    folder: MediaFolder;
-    tags: string[];
-    /** Empty url = render the elegant placeholder */
-    url: string;
-    mobileUrl?: string;
-    posterId?: string;
-    placeholder: PlaceholderKind;
-    /** true = generated sample placeholder, still to be replaced with real photography/film */
-    generated?: boolean;
-    focalX?: number;
-    focalY?: number;
-    mime?: string;
-    size?: number;
-    /** video flags */
-    autoplay?: boolean;
-    muted?: boolean;
-    loop?: boolean;
-    controls?: boolean;
-    videoType?: "Hero" | "Product" | "Collection" | "Campaign" | "Editorial" | "Showroom" | "Craftsmanship" | "Social";
-    status: "active" | "archived";
-    sort: number;
-    createdAt: string;
-  }
+export interface MediaAsset {
+  id: string;
+  type: MediaType;
+  title: string;
+  alt: Localized;
+  caption?: string;
+  description?: string;
+  folder: MediaFolder;
+  tags: string[];
+  /** Empty url = render the elegant placeholder */
+  url: string;
+  mobileUrl?: string;
+  posterId?: string;
+  placeholder: PlaceholderKind;
+  /** true = generated sample placeholder, still to be replaced with real photography/film */
+  generated?: boolean;
+  focalX?: number;
+  focalY?: number;
+  mime?: string;
+  size?: number;
+  /** video flags */
+  autoplay?: boolean;
+  muted?: boolean;
+  loop?: boolean;
+  controls?: boolean;
+  videoType?: "Hero" | "Product" | "Collection" | "Campaign" | "Editorial" | "Showroom" | "Craftsmanship" | "Social";
+  status: "active" | "archived";
+  sort: number;
+  createdAt: string;
+}
 
   /* ── Catalogue ─────────────────────────────────────────────── */
   export interface Seo { title: string; description: string }
@@ -121,6 +121,8 @@
     popularity: number;
     seo: Seo;
     createdAt: string;
+    /** Last time this product's details were saved in Admin */
+    updatedAt?: string;
   }
 
   /* ── Metal rates ──────────────────────────────────────────── */
