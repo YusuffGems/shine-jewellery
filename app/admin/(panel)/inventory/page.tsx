@@ -21,6 +21,9 @@ type Dialog =
   | { kind: "add" }
   | { kind: "edit" | "transfer" | "damage"; line: Line }
   | null;
+type ProductRow = { p: Product; lines: Line[]; total: number; lastAt: string | undefined };
+/** "SHINE Gold & Diamonds - Gold Souq (Branch 1)" → "Gold Souq (Branch 1)" */
+const shortName = (name: string) => (name.includes(" - ") ? name.split(" - ").slice(1).join(" - ") : name);
 type SortKey = "name" | "nameDesc" | "high" | "low" | "recent";
 
 const ERR: Record<string, string> = {
@@ -77,32 +80,66 @@ export default function InventoryPage() {
     [d.inventory, d.products, lastMove, branches], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  const lines = useMemo(() => {
+
+  // One row per product (with its showrooms inside).
+  const productRows = useMemo<ProductRow[]>(() => {
     const term = q.trim().toLowerCase();
-    const list = allLines.filter(({ p, branchId, avail }) => {
-      if (term && !`${p.name.en} ${p.name.ar} ${p.sku}`.toLowerCase().includes(term)) return false;
-      if (fBranch !== "all" && branchId !== fBranch) return false;
-      if (fCat !== "all" && !p.categoryIds.includes(fCat)) return false;
-      if (fMetal !== "all" && p.rateId !== fMetal) return false;
-      if (fLevel === "out" && avail > 0) return false;
-      if (fLevel === "low" && (avail === 0 || avail > low)) return false;
-      if (fLevel === "in" && avail <= low) return false;
-      return true;
-    });
-    const byName = (a: Line, b: Line) => a.p.name.en.localeCompare(b.p.name.en) || a.branchId.localeCompare(b.branchId);
-    list.sort((a, b) => {
+    const rows = d.products
+      .filter((p) => (!term || `${p.name.en} ${p.name.ar} ${p.sku}`.toLowerCase().includes(term)) && (fCat === "all" || p.categoryIds.includes(fCat)) && (fMetal === "all" || p.rateId === fMetal))
+      .map((p) => {
+        const pl = allLines.filter((l) => l.p.id === p.id && (fBranch === "all" || l.branchId === fBranch));
+        const total = pl.reduce((s, l) => s + l.avail, 0);
+        const lastAt = pl.map((l) => l.lastAt).filter(Boolean).sort().pop();
+        return { p, lines: pl, total, lastAt };
+      })
+      .filter((r) => (fLevel === "out" ? r.total === 0 : fLevel === "low" ? r.total > 0 && r.total <= low : fLevel === "in" ? r.total > low : true));
+    const byName = (a: ProductRow, b: ProductRow) => a.p.name.en.localeCompare(b.p.name.en);
+    rows.sort((a, b) => {
       switch (sort) {
         case "nameDesc": return -byName(a, b);
-        case "high": return b.avail - a.avail || byName(a, b);
-        case "low": return a.avail - b.avail || byName(a, b);
+        case "high": return b.total - a.total || byName(a, b);
+        case "low": return a.total - b.total || byName(a, b);
         case "recent": return Date.parse(b.lastAt ?? "0") - Date.parse(a.lastAt ?? "0") || byName(a, b);
         default: return byName(a, b);
       }
     });
-    return list;
-  }, [allLines, q, fBranch, fCat, fMetal, fLevel, sort, low]);
-
-  const paged = usePaged(lines, `${q}|${fBranch}|${fCat}|${fMetal}|${fLevel}|${sort}`);
+    return rows;
+  }, [d.products, allLines, q, fBranch, fCat, fMetal, fLevel, sort, low]);
+  const paged = usePaged(productRows, `${q}|${fBranch}|${fCat}|${fMetal}|${fLevel}|${sort}`);
+  const [manageId, setManageId] = useState<string | null>(null);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const managed = d.products.find((x) => x.id === manageId);
+  const openManage = (p: Product) => {
+    const c: Record<string, number> = {};
+    branches.forEach((b) => { const r = d.inventory.find((x) => x.productId === p.id && x.branchId === b.id); c[b.id] = r ? available(r) : 0; });
+    setCounts(c);
+    setErr("");
+    setManageId(p.id);
+  };
+  const saveManage = () => {
+    if (!managed) return;
+    try {
+      branches.forEach((b) => {
+        const r = d.inventory.find((x) => x.productId === managed.id && x.branchId === b.id);
+        const cur = r ? available(r) : 0;
+        if ((counts[b.id] ?? 0) !== cur) setAvailable(managed.id, b.id, counts[b.id] ?? 0, "Stock count updated");
+      });
+      toast(t("common.saved"));
+      setManageId(null);
+    } catch (e) {
+      setErr(ERR[(e as Error).message] ?? (e as Error).message);
+    }
+  };
+  const removeProductStock = (r: ProductRow) => {
+    if (!r.lines.length) return;
+    if (!window.confirm(`Remove all stock of ${r.p.name.en}${fBranch !== "all" ? ` from ${branchName(fBranch)}` : " from every showroom"}?`)) return;
+    try {
+      r.lines.forEach((l) => deleteStockLine(l.p.id, l.branchId));
+      toast(t("common.deleted"));
+    } catch (e) {
+      toast(ERR[(e as Error).message] ?? (e as Error).message, "error");
+    }
+  };
   const pendingRes = d.orders.filter((o) => o.payment.status === "pending").flatMap((o) => o.items.map((it) => ({ o, it })));
   const resPaged = usePaged(pendingRes, pendingRes.length);
   const txPaged = usePaged(d.inventoryTx, d.inventoryTx.length);
@@ -143,15 +180,6 @@ export default function InventoryPage() {
     }
   };
 
-  const remove = (l: Line) => {
-    if (!window.confirm(`Remove ${l.p.name.en} from ${branchName(l.branchId)}? Its ${l.avail} available piece(s) will be cleared.`)) return;
-    try {
-      deleteStockLine(l.p.id, l.branchId);
-      toast(t("common.deleted"));
-    } catch (e) {
-      toast(ERR[(e as Error).message] ?? (e as Error).message, "error");
-    }
-  };
 
   const dialogLine = dialog && dialog.kind !== "add" ? dialog.line : null;
   const titles = { add: "Add stock", edit: "Edit stock", transfer: "Move to another showroom", damage: "Mark as damaged" } as const;
@@ -205,51 +233,53 @@ export default function InventoryPage() {
               <option value="recent">Recently updated</option>
             </select>
             <button className="btn btn--ghost btn--sm" onClick={clearFilters}>Clear</button>
-            <span className="muted small" style={{ marginInlineStart: "auto" }}>{lines.length} results</span>
+            <span className="muted small" style={{ marginInlineStart: "auto" }}>{productRows.length} products</span>
           </div>
 
-          <div className="table-wrap">
+          <div className="table-wrap inv-scroll">
             <table className="table inv-table">
               <thead>
                 <tr>
                   <th className="num" style={{ width: 56 }}>S.No</th>
                   <th>{t("admin.f.product")}</th>
-                  <th>Showroom</th>
-                  <th className="num">Available</th>
-                  <th className="num">Reserved</th>
-                  <th className="num">Sold</th>
-                  <th className="num">Damaged</th>
+                  <th>Stock in each showroom</th>
+                  <th className="num">Total</th>
                   <th>{t("admin.f.status")}</th>
                   <th>Last updated</th>
                   <th className="num">{t("admin.actions")}</th>
                 </tr>
               </thead>
               <tbody>
-                {paged.pageRows.map((l, i) => {
-                  const level = stockStatus(l.avail, low);
+                {paged.pageRows.map((r, i) => {
+                  const level = stockStatus(r.total, low);
                   return (
-                    <tr key={l.key}>
+                    <tr key={r.p.id}>
                       <td className="num muted">{paged.start + i + 1}</td>
                       <td>
                         <span className="cell-main">
-                          <span className="thumb"><Media mediaId={l.p.imageIds[0]} kind="product" /></span>
-                          <span><b>{L(l.p.name)}</b><small className="ltr">{l.p.sku} · {L(d.rates.find((r) => r.id === l.p.rateId)?.label)}</small></span>
+                          <span className="thumb"><Media mediaId={r.p.imageIds[0]} kind="product" /></span>
+                          <span><b>{L(r.p.name)}</b><small className="ltr">{r.p.sku} · {L(d.rates.find((x) => x.id === r.p.rateId)?.label)}</small></span>
                         </span>
                       </td>
-                      <td className="small">{branchName(l.branchId)}</td>
-                      <td className="num"><b className="inv-qty">{l.avail}</b></td>
-                      <td className="num muted">{l.rec.reserved}</td>
-                      <td className="num muted">{l.rec.sold}</td>
-                      <td className="num muted">{l.rec.damaged}</td>
+                      <td>
+                        {r.lines.length ? (
+                          <div className="inv-chips">
+                            {r.lines.map((l) => (
+                              <span key={l.branchId} className={`inv-chip${l.avail === 0 ? " inv-chip--zero" : ""}`} title={branchName(l.branchId)}>
+                                {shortName(branchName(l.branchId))} <b>{l.avail}</b>
+                              </span>
+                            ))}
+                          </div>
+                        ) : <span className="muted small">No stock in any showroom</span>}
+                      </td>
+                      <td className="num"><b className="inv-qty">{r.total}</b></td>
                       <td><StatusBadge value={level} label={t(`admin.inventory.level.${level}`)} /></td>
-                      <td className="small muted" style={{ whiteSpace: "nowrap" }}>{l.lastAt ? date(l.lastAt, true) : "—"}</td>
+                      <td className="small muted" style={{ whiteSpace: "nowrap" }}>{r.lastAt ? date(r.lastAt, true) : "—"}</td>
                       <td>
                         {editable ? (
-                          <div className="row-actions">
-                            <button className="btn btn--secondary btn--sm" onClick={() => open({ kind: "edit", line: l })}>{t("common.edit")}</button>
-                            <button className="btn btn--secondary btn--sm" title="Move to another showroom" onClick={() => open({ kind: "transfer", line: l })}>Move</button>
-                            <button className="btn btn--secondary btn--sm" title="Mark damaged" onClick={() => open({ kind: "damage", line: l })}>Damaged</button>
-                            <button className="btn btn--danger btn--sm" aria-label={t("common.delete")} onClick={() => remove(l)}><Icon name="trash" size={14} /></button>
+                          <div className="row-actions" style={{ flexWrap: "nowrap" }}>
+                            <button className="btn btn--sm" onClick={() => openManage(r.p)}>Manage stock</button>
+                            <button className="btn btn--danger btn--sm" disabled={!r.lines.length} onClick={() => removeProductStock(r)}>Delete</button>
                           </div>
                         ) : null}
                       </td>
@@ -258,7 +288,7 @@ export default function InventoryPage() {
                 })}
               </tbody>
             </table>
-            {!lines.length ? <EmptyState text={allLines.length ? "No stock matches these filters." : "No stock yet — click “Add stock”."} /> : null}
+            {!productRows.length ? <EmptyState text="No products match these filters." /> : null}
           </div>
           {paged.pager}
         </>
@@ -349,6 +379,55 @@ export default function InventoryPage() {
             ) : (
               <label className="field span-2"><span className="label">{t("admin.inventory.note")}</span><input className="input" placeholder="Optional — e.g. New stock arrived" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></label>
             )}
+          </div>
+        ) : null}
+      </Modal>
+      <Modal
+        open={!!managed}
+        onClose={() => setManageId(null)}
+        wide
+        title={managed ? `Manage stock · ${managed.name.en}` : ""}
+        closeLabel={t("common.close")}
+        footer={<>
+          {err ? <span className="field-error" style={{ marginInlineEnd: "auto" }}>{err}</span> : null}
+          <button className="btn btn--secondary" onClick={() => setManageId(null)}>{t("common.cancel")}</button>
+          <button className="btn" onClick={saveManage}>Save all</button>
+        </>}
+      >
+        {managed ? (
+          <div className="stack">
+            <p className="muted small">Type how many pieces are in each showroom, then click <b>Save all</b>. Use <b>Move</b> or <b>Damaged</b> for transfers and breakages.</p>
+            <table className="table inv-manage">
+              <thead><tr><th>Showroom</th><th className="num">Available now</th><th style={{ width: 210 }}>New count</th><th className="num">More</th></tr></thead>
+              <tbody>
+                {branches.map((b) => {
+                  const rec = d.inventory.find((x) => x.productId === managed.id && x.branchId === b.id);
+                  const now = rec ? available(rec) : 0;
+                  const line: Line = { key: `${managed.id}|${b.id}`, p: managed, branchId: b.id, rec: rec ?? { id: "", productId: managed.id, branchId: b.id, total: 0, reserved: 0, sold: 0, returned: 0, damaged: 0, transferred: 0 }, avail: now, lastAt: undefined };
+                  const v = counts[b.id] ?? 0;
+                  return (
+                    <tr key={b.id}>
+                      <td>{L(b.name)}{rec?.reserved ? <small className="muted"> · {rec.reserved} reserved</small> : null}</td>
+                      <td className="num">{now}</td>
+                      <td>
+                        <div className="inv-stepper">
+                          <button className="btn btn--secondary btn--sm" aria-label="Minus one" onClick={() => setCounts({ ...counts, [b.id]: Math.max(0, v - 1) })}>−</button>
+                          <input className="input" type="number" min={0} value={v} onChange={(e) => setCounts({ ...counts, [b.id]: Math.max(0, Number(e.target.value)) })} />
+                          <button className="btn btn--secondary btn--sm" aria-label="Plus one" onClick={() => setCounts({ ...counts, [b.id]: v + 1 })}>+</button>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="row-actions" style={{ justifyContent: "flex-end", flexWrap: "nowrap" }}>
+                          <button className="btn btn--secondary btn--sm" disabled={now === 0} onClick={() => (setManageId(null), open({ kind: "transfer", line }))}>Move</button>
+                          <button className="btn btn--secondary btn--sm" disabled={now === 0} onClick={() => (setManageId(null), open({ kind: "damage", line }))}>Damaged</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <p className="small">Total after saving: <b>{branches.reduce((s2, b) => s2 + (counts[b.id] ?? 0), 0)}</b> pieces</p>
           </div>
         ) : null}
       </Modal>

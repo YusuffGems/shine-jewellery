@@ -249,3 +249,14 @@
 .inv-toolbar .select { width: auto; min-width: 150px; }
 .inv-qty { font-size: 1.05rem; }
 @media (max-width: 900px) { .inv-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Inventory — product rows, showroom chips, scrolling list, manage panel */
+.inv-scroll { max-height: 70vh; overflow: auto; }
+.inv-scroll thead th { position: sticky; top: 0; z-index: 2; }
+.inv-chips { display: flex; flex-wrap: wrap; gap: 6px; max-width: 520px; }
+.inv-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border: 1px solid var(--color-border); border-radius: 99px; font-size: 0.78rem; white-space: nowrap; background: var(--color-surface); }
+.inv-chip b { font-weight: 600; }
+.inv-chip--zero { opacity: 0.55; }
+.inv-stepper { display: grid; grid-template-columns: 34px 1fr 34px; gap: 4px; align-items: center; }
+.inv-stepper .input { min-height: 34px; text-align: center; padding-inline: 4px; }
+.inv-stepper .btn { min-height: 34px; padding: 0; }
