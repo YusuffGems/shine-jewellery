@@ -222,3 +222,10 @@
 .recent-orders td.num, .recent-orders td:first-child { white-space: nowrap; }
 .recent-orders td:first-child { padding-inline-start: 0; }
 .recent-orders td:last-child { padding-inline-end: 0; }
+
+
+/* Pricing › Live price list (add / edit / delete inside a card) */
+.price-list-crud .page-head { margin-bottom: 1rem; }
+.price-list-crud .page-head h1 { font-size: 1.15rem; font-family: inherit; font-weight: 600; }
+.price-list-crud .a-toolbar { flex-wrap: wrap; }
+.price-list-crud .a-toolbar .select { width: auto; min-width: 150px; }
