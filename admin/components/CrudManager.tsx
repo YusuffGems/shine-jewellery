@@ -4,7 +4,7 @@
    A module declares columns + fields; this handles search, table,
    the editor modal, validation hooks, save/delete and permissions.
    ────────────────────────────────────────────────────────────── */
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useI18n } from "@/shared/hooks/useI18n";
 import { useAdmin } from "@/admin/hooks/useAdmin";
 import type { Permission } from "@/lib/auth/rbac";
@@ -133,6 +133,8 @@ export interface CrudProps<T extends Row> {
   rowActions?: (item: T) => ReactNode;
 }
 
+const PAGE_SIZE = 10;
+
 export function CrudManager<T extends Row>(p: CrudProps<T>) {
   const { t } = useI18n();
   const { can } = useAdmin();
@@ -142,7 +144,24 @@ export function CrudManager<T extends Row>(p: CrudProps<T>) {
   const [isNew, setIsNew] = useState(false);
   const [error, setError] = useState("");
   const writable = can(p.writePerm);
-  const rows = useMemo(() => p.items.filter((i) => (!p.filter || p.filter(i)) && (!q || p.search(i).toLowerCase().includes(q.toLowerCase()))), [p, q]);
+  const [sort, setSort] = useState<"default" | "new" | "old">("default");
+  const [page, setPage] = useState(1);
+  const rows = useMemo(() => {
+    const list = p.items
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => (!p.filter || p.filter(item)) && (!q || p.search(item).toLowerCase().includes(q.toLowerCase())));
+    if (sort !== "default") {
+      // Newest / oldest by created date when the record has one, otherwise by the order it was added.
+      const key = (x: { item: T; index: number }) => (typeof x.item.createdAt === "string" ? Date.parse(x.item.createdAt) || 0 : 0) * 1e4 + x.index;
+      list.sort((a, b) => (sort === "new" ? key(b) - key(a) : key(a) - key(b)));
+    }
+    return list.map((x) => x.item);
+  }, [p, q, sort]);
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  useEffect(() => setPage(1), [q, sort, p.items.length]);
+  useEffect(() => { if (page > pages) setPage(pages); }, [page, pages]);
+  const start = (page - 1) * PAGE_SIZE;
+  const pageRows = rows.slice(start, start + PAGE_SIZE);
 
   if (!can(p.readPerm)) return <EmptyState text={t("admin.noAccess")} />;
 
@@ -170,19 +189,26 @@ export function CrudManager<T extends Row>(p: CrudProps<T>) {
       <div className="a-toolbar">
         <input className="input" type="search" placeholder={t("admin.search")} value={q} onChange={(e) => setQ(e.target.value)} aria-label={t("admin.search")} />
         {p.toolbar}
+        <select className="select" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="Sort">
+          <option value="default">Default order</option>
+          <option value="new">Newest first</option>
+          <option value="old">Oldest first</option>
+        </select>
         <span className="muted small" style={{ marginInlineStart: "auto" }}>{t("admin.results", { count: rows.length })}</span>
       </div>
       <div className="table-wrap">
         <table className="table">
           <thead>
             <tr>
+              <th className="num" style={{ width: 56 }}>S.No</th>
               {p.columns.map((c) => <th key={c.label} className={c.num ? "num" : undefined}>{c.label}</th>)}
               <th className="num">{t("admin.actions")}</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {pageRows.map((r, i) => (
               <tr key={r.id}>
+                <td className="num muted">{start + i + 1}</td>
                 {p.columns.map((c) => <td key={c.label} className={c.num ? "num" : undefined}>{c.render(r)}</td>)}
                 <td>
                   <div className="row-actions">
@@ -204,6 +230,23 @@ export function CrudManager<T extends Row>(p: CrudProps<T>) {
         </table>
         {!rows.length ? <EmptyState text={t("admin.noResults")} /> : null}
       </div>
+      {rows.length > PAGE_SIZE ? (
+        <nav className="a-pager" aria-label="Pages">
+          <span className="muted small">Showing {start + 1}–{Math.min(start + PAGE_SIZE, rows.length)} of {rows.length}</span>
+          <div className="a-pager-buttons">
+            <button className="btn btn--secondary btn--sm" disabled={page === 1} onClick={() => setPage(page - 1)}>‹ Prev</button>
+            {Array.from({ length: pages }, (_, i) => i + 1)
+              .filter((n) => n === 1 || n === pages || Math.abs(n - page) <= 1)
+              .map((n, i, arr) => (
+                <span key={n} className="row" style={{ gap: 4 }}>
+                  {i > 0 && n - arr[i - 1] > 1 ? <span className="muted">…</span> : null}
+                  <button className={`btn btn--sm ${n === page ? "" : "btn--secondary"}`} aria-current={n === page ? "page" : undefined} onClick={() => setPage(n)}>{n}</button>
+                </span>
+              ))}
+            <button className="btn btn--secondary btn--sm" disabled={page === pages} onClick={() => setPage(page + 1)}>Next ›</button>
+          </div>
+        </nav>
+      ) : null}
 
       <Modal
         open={!!draft}
